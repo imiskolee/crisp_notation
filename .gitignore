@@ -1,4 +1,5 @@
 # Dart / Flutter
+*.png
 .dart_tool/
 .packages
 build/

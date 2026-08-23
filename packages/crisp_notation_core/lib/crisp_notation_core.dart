@@ -24,6 +24,7 @@ export 'src/interchange/mscz_container.dart';
 export 'src/interchange/mxl_container.dart';
 export 'src/interchange/zip.dart';
 export 'src/layout/grand_staff.dart';
+export 'src/layout/jianpu_layout.dart';
 export 'src/layout/layout_engine.dart' show LayoutEngine;
 export 'src/layout/layout_settings.dart';
 export 'src/layout/multi_part.dart';

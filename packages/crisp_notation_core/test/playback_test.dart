@@ -320,4 +320,143 @@ void main() {
       expect(pitchesForElements(twoVoice, {v2FirstId}), {60});
     });
   });
+
+  group('tickTimeline (PPQ tick API)', () {
+    test('ticksFor converts whole-note fractions to ticks exactly', () {
+      expect(ticksFor(f(0, 1)), 0);
+      expect(ticksFor(f(1, 4)), 480); // quarter
+      expect(ticksFor(f(1, 8)), 240); // eighth
+      expect(ticksFor(f(1, 16)), 120); // sixteenth
+      expect(ticksFor(f(3, 8)), 720); // dotted quarter (3/8 whole = 1.5 beats)
+      expect(ticksFor(f(3, 4)), 1440); // dotted half (3/4 whole = 3 beats)
+      expect(ticksFor(f(1, 1)), 1920); // whole
+      // Triplet eighth = 1/12 of a whole = 160 ticks
+      expect(ticksFor(f(1, 12)), 160);
+      // Higher PPQ
+      expect(ticksFor(f(1, 4), ticksPerQuarter: 960), 960);
+    });
+
+    test('tickTimeline mirrors playbackTimeline element ids and order', () {
+      final score = Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c4:q d4:e e4:e f4:h | g4:w',
+      );
+      final frac = playbackTimeline(score);
+      final tick = tickTimeline(score);
+      expect(tick.length, frac.length);
+      for (var i = 0; i < frac.length; i++) {
+        expect(tick[i].elementId, frac[i].elementId);
+        expect(tick[i].isRest, frac[i].isRest);
+        expect(tick[i].voice, frac[i].voice);
+        expect(tick[i].measureIndex, frac[i].measureIndex);
+        expect(tick[i].onTick, ticksFor(frac[i].start));
+        expect(tick[i].offTick, ticksFor(frac[i].end));
+      }
+    });
+
+    test('onTick values for a 4/4 measure of quarters', () {
+      final tick = tickTimeline(Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c4:q d4 e4 f4',
+      ));
+      expect(tick.map((n) => n.onTick), [0, 480, 960, 1440]);
+      expect(tick.map((n) => n.offTick), [480, 960, 1440, 1920]);
+    });
+
+    test('dotted and triplet durations land on exact tick boundaries', () {
+      final tick = tickTimeline(Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c4:q. d4:e. e4:e f4:s',
+      ));
+      // q. = 720, e. = 360, e = 240, s = 120
+      expect(tick[0].onTick, 0);
+      expect(tick[1].onTick, 720);
+      expect(tick[2].onTick, 1080);
+      expect(tick[3].onTick, 1320);
+      expect(tick[3].offTick, 1440);
+    });
+
+    test('measureIndex carries through to tick entries', () {
+      final tick = tickTimeline(Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c4:q d4 e4 f4 | g4:q a4 b4 c5',
+      ));
+      expect(tick.take(4).map((n) => n.measureIndex), [0, 0, 0, 0]);
+      expect(tick.skip(4).map((n) => n.measureIndex), [1, 1, 1, 1]);
+    });
+
+    test('idsAtTick returns sounding ids, rests excluded', () {
+      final tick = tickTimeline(Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c5:h r:q d5:q ; c4:w',
+      ));
+      // 0..960: c5 half + c4 whole sounding
+      expect(idsAtTick(tick, 0), {'e0', 'e3'});
+      expect(idsAtTick(tick, 960), {'e3'}); // rest in voice 1
+      expect(idsAtTick(tick, 1440), {'e2', 'e3'}); // d5 quarter
+      expect(idsAtTick(tick, 1920), isEmpty); // past the end
+      // At the exact boundary: offTick is exclusive
+      expect(idsAtTick(tick, 480), {'e0', 'e3'}); // c5 still sounding
+    });
+
+    test('idsAtTick with repeats expanded', () {
+      final tick = tickTimeline(Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: '!repeat c4:q d4 e4 f4 !endrepeat',
+      ));
+      // Two passes: e0 appears at tick 0 and again at 1920
+      expect(idsAtTick(tick, 0), {'e0'});
+      expect(idsAtTick(tick, 1920), {'e0'});
+      // Mid-second-pass
+      expect(idsAtTick(tick, 1920 + 480), {'e1'});
+    });
+
+    test('BPM independence: same tick list at any tempo', () {
+      final score = Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c4:q d4 e4 f4',
+      );
+      final tick60 = tickTimeline(score);
+      // The tick list is identical regardless of BPM — only the
+      // tick→seconds conversion changes.
+      final tick120 = tickTimeline(score);
+      expect(tick60, tick120);
+      // But the seconds for the same tick differ by BPM
+      expect(
+        ticksToSeconds(480, quarterBpm: 60),
+        closeTo(1.0, 1e-9),
+      );
+      expect(
+        ticksToSeconds(480, quarterBpm: 120),
+        closeTo(0.5, 1e-9),
+      );
+    });
+
+    test('secondsToTicks / ticksToSeconds round-trip', () {
+      // 2 seconds at 120 BPM → 1920 ticks (4 quarters) → 2 seconds
+      final tick = secondsToTicks(2.0, quarterBpm: 120);
+      expect(tick, 1920);
+      expect(ticksToSeconds(tick, quarterBpm: 120), closeTo(2.0, 1e-9));
+      // 1 second at 60 BPM → 480 ticks (1 quarter)
+      expect(secondsToTicks(1.0, quarterBpm: 60), 480);
+    });
+
+    test('value semantics of PlaybackTickNote', () {
+      final score = Score.simple(notes: 'c4:q');
+      final a = tickTimeline(score).single;
+      final b = tickTimeline(score).single;
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('custom ticksPerQuarter (960)', () {
+      final tick = tickTimeline(
+        Score.simple(notes: 'c4:q d4:e'),
+        ticksPerQuarter: 960,
+      );
+      expect(tick[0].onTick, 0);
+      expect(tick[1].onTick, 960); // quarter = 960 at this PPQ
+      expect(tick[1].offTick, 960 + 480); // eighth = 480
+    });
+  });
 }

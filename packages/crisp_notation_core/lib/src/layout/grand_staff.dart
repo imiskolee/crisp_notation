@@ -5,9 +5,59 @@ import 'dart:math';
 
 import '../model/score.dart';
 import '../theory/fraction.dart';
+import 'jianpu_layout.dart';
 import 'layout_engine.dart';
 import 'layout_settings.dart';
 import 'score_layout.dart';
+
+/// Lays out one staff of a multi-staff system, routing to the engine the
+/// score's [StaffType] picks. Jianpu takes the column-alignment contract
+/// ([leadingWidth]/[measureWidths]/[forcedColumns]) but not the staff-only
+/// overlays (deferred stems, note-name labels, target-width padding) —
+/// those are no-ops on a digit row.
+ScoreLayout layoutStaff(
+  Score score,
+  LayoutSettings settings, {
+  required double? leadingWidth,
+  required List<double>? measureWidths,
+  required List<Map<Fraction, double>>? forcedColumns,
+  required double spacingStretch,
+  required bool drawTimeSignature,
+  required bool finalBarline,
+  Map<String, bool> deferredStems = const {},
+  double? targetWidth,
+  bool showNoteNames = false,
+  bool showNoteOctaves = false,
+  NoteNameStyle noteNameStyle = NoteNameStyle.letter,
+}) {
+  if (score.staffType == StaffType.jianpu) {
+    return const JianpuLayoutEngine().layout(
+      score,
+      settings,
+      leadingWidth: leadingWidth,
+      measureWidths: measureWidths,
+      forcedColumns: forcedColumns,
+      spacingStretch: spacingStretch,
+      drawTimeSignature: drawTimeSignature,
+      finalBarline: finalBarline,
+    );
+  }
+  return const LayoutEngine().layout(
+    score,
+    settings,
+    leadingWidth: leadingWidth,
+    measureWidths: measureWidths,
+    forcedColumns: forcedColumns,
+    deferredStems: deferredStems,
+    drawTimeSignature: drawTimeSignature,
+    finalBarline: finalBarline,
+    targetWidth: targetWidth,
+    spacingStretch: spacingStretch,
+    showNoteNames: showNoteNames,
+    showNoteOctaves: showNoteOctaves,
+    noteNameStyle: noteNameStyle,
+  );
+}
 
 /// Cross-staff onset gridding (§2.9): shared per-measure column positions
 /// (onset → the **notehead** x from the measure's content start) that align
@@ -252,14 +302,25 @@ GrandStaffLayout layoutGrandStaff(
       '${grandStaff.lower.measures.length})',
     );
   }
-  const engine = LayoutEngine();
   // The natural passes carry the same [spacingStretch] as the final passes, so
   // the shared [measureWidths] grow with the stretch and both staves stay
   // aligned (a wider stretch fills the line, distributed as note spacing).
-  final upperNatural = engine.layout(grandStaff.upper, settings,
-      drawTimeSignature: drawTimeSignature, spacingStretch: spacingStretch);
-  final lowerNatural = engine.layout(grandStaff.lower, settings,
-      drawTimeSignature: drawTimeSignature, spacingStretch: spacingStretch);
+  // Each staff routes to its own engine (staff vs jianpu) so a mixed system
+  // measures each notation's natural leading and widths correctly.
+  final upperNatural = layoutStaff(grandStaff.upper, settings,
+      leadingWidth: null,
+      measureWidths: null,
+      forcedColumns: null,
+      spacingStretch: spacingStretch,
+      drawTimeSignature: drawTimeSignature,
+      finalBarline: finalBarline);
+  final lowerNatural = layoutStaff(grandStaff.lower, settings,
+      leadingWidth: null,
+      measureWidths: null,
+      forcedColumns: null,
+      spacingStretch: spacingStretch,
+      drawTimeSignature: drawTimeSignature,
+      finalBarline: finalBarline);
 
   double leadingOf(ScoreLayout layout) => layout.measureRegions.isEmpty
       ? layout.width
@@ -279,7 +340,9 @@ GrandStaffLayout layoutGrandStaff(
   // Cross-staff beams: an upper-staff note stems down toward the beam, a
   // lower-staff note stems up. Defer those stems so the engine draws the
   // notehead but no stem/flag, then draw the connecting beam here where the
-  // inter-staff [staffGap] is known.
+  // inter-staff [staffGap] is known. Jianpu staves have no stems, so the
+  // beam's ids never resolve on a jianpu staff and the deferral map stays
+  // empty — cross-staff beams are a standard-staff-only feature.
   final upperIds = _elementIds(grandStaff.upper);
   final lowerIds = _elementIds(grandStaff.lower);
   final deferUpper = <String, bool>{};
@@ -295,35 +358,38 @@ GrandStaffLayout layoutGrandStaff(
   }
 
   // §2.9: align simultaneous notes across the two staves (all voices).
+  // alignedColumns uses the staff engine's notehead positions for every
+  // staff — a jianpu digit anchors at the same x as a staff notehead at
+  // the same onset, which is exactly the alignment we want.
   final columns = gridAlign
       ? alignedColumns([grandStaff.upper, grandStaff.lower], settings,
           spacingStretch: spacingStretch)
       : null;
 
-  final upper = engine.layout(
+  final upper = layoutStaff(
     grandStaff.upper,
     settings,
     leadingWidth: leading,
     measureWidths: columns == null ? measureWidths : null,
     forcedColumns: columns,
-    deferredStems: deferUpper,
+    spacingStretch: spacingStretch,
     drawTimeSignature: drawTimeSignature,
     finalBarline: finalBarline,
-    spacingStretch: spacingStretch,
+    deferredStems: deferUpper,
     showNoteNames: showNoteNames,
     showNoteOctaves: showNoteOctaves,
     noteNameStyle: noteNameStyle,
   );
-  final lower = engine.layout(
+  final lower = layoutStaff(
     grandStaff.lower,
     settings,
     leadingWidth: leading,
     measureWidths: columns == null ? measureWidths : null,
     forcedColumns: columns,
-    deferredStems: deferLower,
+    spacingStretch: spacingStretch,
     drawTimeSignature: drawTimeSignature,
     finalBarline: finalBarline,
-    spacingStretch: spacingStretch,
+    deferredStems: deferLower,
     showNoteNames: showNoteNames,
     showNoteOctaves: showNoteOctaves,
     noteNameStyle: noteNameStyle,

@@ -12,7 +12,6 @@ import 'dart:typed_data';
 import '../model/element.dart';
 import '../model/score.dart';
 import '../playback/playback_timeline.dart';
-import '../theory/fraction.dart';
 
 /// Default note-on velocity — used for a note with no dynamic in force. Equal
 /// to mezzo-forte, so a score that carries no dynamics exports byte-for-byte as
@@ -152,7 +151,7 @@ Uint8List scoreToMidi(
       if (change != null) {
         final us = (60000000 / change.quarterBpm).round();
         if (us != currentUs) {
-          add(_ticks(note.start, ticksPerQuarter), 0, [
+          add(ticksFor(note.start, ticksPerQuarter: ticksPerQuarter), 0, [
             0xFF, 0x51, 0x03, //
             (us >> 16) & 0xFF,
             (us >> 8) & 0xFF,
@@ -188,8 +187,8 @@ Uint8List scoreToMidi(
     // Each voice on its own channel (voice 1→ch0, 2→ch1, 3→ch2, 4→ch3), so all
     // four voices sound and stay separable. PlaybackNote.voice is 0-based.
     final channel = note.voice.clamp(0, 15);
-    final onTick = _ticks(note.start, ticksPerQuarter);
-    var durTicks = _ticks(note.duration, ticksPerQuarter);
+    final onTick = ticksFor(note.start, ticksPerQuarter: ticksPerQuarter);
+    var durTicks = ticksFor(note.duration, ticksPerQuarter: ticksPerQuarter);
     // Staccato: detach the note by cutting its sounding length ~in half.
     if (element.articulations.contains(Articulation.staccato)) {
       durTicks = (durTicks * 0.5).round();
@@ -229,14 +228,6 @@ Uint8List scoreToMidi(
   _writeUint32(out, track.length);
   out.addAll(track);
   return Uint8List.fromList(out);
-}
-
-/// Rounds a whole-note [time] to an integer tick count (a whole note is
-/// 4 × [ticksPerQuarter]). Exact rational rounding, no floating point.
-int _ticks(Fraction time, int ticksPerQuarter) {
-  final num = time.numerator * 4 * ticksPerQuarter;
-  final den = time.denominator;
-  return (num + den ~/ 2) ~/ den;
 }
 
 int _log2(int value) {

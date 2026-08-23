@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:crisp_notation/crisp_notation.dart';
 
+import 'note_player.dart';
+
 /// One entry of the gallery corpus.
 class GalleryItem {
   final String title;
@@ -444,20 +446,343 @@ final List<GalleryItem> galleryItems = [
       );
     }(),
   ),
+
+  // --- Jianpu (numbered notation) — routed by Score.staffType ----------
+  GalleryItem(
+    'Jianpu: C major scale & octave dots',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: 'c3:q c4 c5 r:q | c4:q d4 e4 f4 | g4:h a4:h | b4:q c5 d5 e5 '
+          '| f5:e f5 e5 d5 c5:h | c5:w',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: durations, rests & underlines',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: 'c4:w | c4:h c4:h | c4:q. c4:e r:q r:q | '
+          'c4:e c4 c4 c4 c4:s c4 c4 c4 c4:e c4 | r:w',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: ties, slurs & repeats',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: '!repeat c4:q( d4 e4 f4) | g4:h~ g4:q r:q | '
+          '!endrepeat !volta=1 a4:h g4:h | !volta=2 c5:h. c4:q',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: G major song (lyrics & chords)',
+    Score.simple(
+      keySignature: const KeySignature(1),
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: 'd4:q d4 a4 a4 | b4:q b4 a4:h | g4:q g4 f#4 f#4 | e4:q e4 d4:h',
+      lyrics: 'Twin- kle twin- kle lit- tle star twin- kle twin- kle star',
+      annotations: 'G * * * C * G G * C * G *',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: dynamics & hairpins',
+    () {
+      final base = Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        staffType: StaffType.jianpu,
+        notes: 'c4:q d4 e4 f4 | g4:h e4:h | c4:w',
+      );
+      return Score(
+        clef: base.clef,
+        staffType: base.staffType,
+        timeSignature: base.timeSignature,
+        measures: base.measures,
+        dynamics: const [
+          DynamicMarking('e0', DynamicLevel.p),
+          DynamicMarking('e4', DynamicLevel.ff),
+          DynamicMarking('e6', DynamicLevel.mp),
+        ],
+        hairpins: const [
+          Hairpin('e0', 'e3', HairpinType.crescendo),
+          Hairpin('e4', 'e5', HairpinType.diminuendo),
+        ],
+      );
+    }(),
+  ),
+  GalleryItem(
+    'Jianpu: octaves (2 dots below to 2 above)',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: 'c2:q c3 c4 c5 | c6:q c5 c4 c3 | c2:w c6:w',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: keys (D, ♭E, A, ♯F)',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: '!key=2 d4:q e4 f#4 g4 | !key=-3 eb4:q f4 g4 ab4 | '
+          '!key=3 a4:q b4 c#4 d4 | !key=6 f#4:q g#4 a#4 b4',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: accidentals (♯ ♭ ♮ ♯♯ ♭♭)',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: 'c4:q c#4 c4 cn4 | dbb4:q c##4 b4 bn4 | '
+          'f#4:q bb4 e#4 f##4 | cn4:q d4 e4 f4',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: cross-measure underlines',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      notes: 'c4:e d4 e4 f4 | g4:e a4 b4 c5 | '
+          'c4:s d4 e4 f5 | g5:s f5 e5 c5',
+    ),
+  ),
+  GalleryItem(
+    'Jianpu: 减时线 + 下方八度点组合',
+    Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      staffType: StaffType.jianpu,
+      // 下方八度点(c2=2点, c3=1点)与减时线(八分=1层, 十六分=2层)叠加
+      notes: 'c3:e d3 c2:e d2 | c2:s d2 c3:s d3 | '
+          'c3:q c2:e d2 e3 | c2:s d2 e2 f2',
+    ),
+  ),
 ];
 
 /// Scrollable gallery of the corpus (plus grand-staff and multi-system
 /// showcase cards).
-class GalleryScreen extends StatelessWidget {
+class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
+
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen> {
+  final _notePlayer = NotePlayer();
+
+  @override
+  void dispose() {
+    _notePlayer.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: galleryItems.length + 2,
+      itemCount: galleryItems.length + 7,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
+        if (index == galleryItems.length + 6) {
+          // Interactive: tap to highlight + play pitch.
+          final score = StaffSystem([
+            Score.simple(
+              timeSignature: TimeSignature.fourFour,
+              staffType: StaffType.jianpu,
+              notes: 'c4:q d4 e4 f4 | g4:q a4 b4 c5 | '
+                  'c4:e d4 e4 f4 | g4:w',
+            ),
+          ]);
+          // Build a playback timeline to resolve element-id → pitches.
+          final firstStaff = score.staves.first;
+          return Card(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tap to highlight + play (点击高亮 + 播放音高)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'tapToHighlight + onElementTap — 点击音符高亮并播放 1 秒音频',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  StaffSystemView(
+                    system: score,
+                    layoutMode: SystemLayoutMode.wrapped,
+                    staffSpace: 10,
+                    tapToHighlight: true,
+                    onElementTap: (id) {
+                      final midis =
+                          pitchesForElements(firstStaff, [id]);
+                      if (midis.isEmpty) return;
+                      _notePlayer.playChord(midis.toList());
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        if (index == galleryItems.length + 5) {
+          // Layout mode 2: single-line horizontal scroll (piano roll / 卷帘).
+          final score = StaffSystem([
+            Score.simple(
+              timeSignature: TimeSignature.fourFour,
+              notes: 'c5:q d5 e5 f5 | g5:e a5 b5 c6 d6 e6 | f6:h e6 d6 | c6:w',
+            ),
+            Score.simple(
+              clef: Clef.bass,
+              timeSignature: TimeSignature.fourFour,
+              notes: 'c3:h g3:h | a2:e b2 c3 d3 e3 f3 | g3:h f3 e3 | c3:w',
+            ),
+            Score.simple(
+              timeSignature: TimeSignature.fourFour,
+              staffType: StaffType.jianpu,
+              notes: 'c4:q d4 e4 f4 | g4:e a4 b4 c5 d5 e5 | f5:h e5 d5 | c5:w',
+            ),
+          ], brackets: [
+            StaffBracket(0, 1, kind: StaffBracketKind.brace),
+          ]);
+          return Card(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Single-line horizontal scroll (piano + jianpu 卷帘模式)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '所有小节排成一行，横向滚动（一行 = 整个 multi-staff system）',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 260,
+                    child: StaffSystemScrollView(
+                      system: score,
+                      staffSpace: 8,
+                      staffGap: 4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        if (index == galleryItems.length + 4) {
+          // Layout mode 1: wrapped multi-line (multi-system) via StaffSystemView.
+          final longScore = StaffSystem([
+            Score.simple(
+              keySignature: const KeySignature(1),
+              timeSignature: TimeSignature.fourFour,
+              notes: 'g4:q a4 b4 c5 | d5:e c5 b4 a4 g4:h |'
+                  'e4:q g4 b4 d5 | c5:q a4 f#4 d4 |'
+                  'g4:e a4 b4 c5 d5:q g5 | f#5:q e5 d5 c5 | g4:w |'
+                  'a4:e b4 c5 d5 e5 f#5 g5 a5 | b5:h a5 g5 | f#5:q e5 d5 | c5:w',
+            ),
+          ]);
+          return Card(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Wrapped multi-line layout (自动换行多行)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'StaffSystemView 默认 layoutMode: wrapped — 超宽时自动断行，多系统从上到下堆叠。',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  StaffSystemView(
+                    system: longScore,
+                    layoutMode: SystemLayoutMode.wrapped,
+                    staffSpace: 8,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        if (index == galleryItems.length + 3) {
+          return Card(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mixed staff system (piano + jianpu 弹唱谱)',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  StaffSystemView(
+                    system: StaffSystem([
+                      Score.simple(
+                        timeSignature: TimeSignature.fourFour,
+                        notes: 'c5:q d5 e5 f5 | g5 a5 b5 c6',
+                      ),
+                      Score.simple(
+                        clef: Clef.bass,
+                        timeSignature: TimeSignature.fourFour,
+                        notes: 'c3:h g3:h | c3:h g3:h',
+                      ),
+                      Score.simple(
+                        timeSignature: TimeSignature.fourFour,
+                        staffType: StaffType.jianpu,
+                        notes: 'c4:q d4 e4 f4 | g4 a4 b4 c5',
+                      ),
+                    ]),
+                    staffGap: 4.0,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        if (index == galleryItems.length + 2) {
+          return Card(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mixed grand staff (standard + jianpu)',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  GrandStaffView(
+                    grandStaff: GrandStaff(
+                      upper: Score.simple(
+                        timeSignature: TimeSignature.fourFour,
+                        notes: 'c4:q d4 e4 f4 | g4 a4 b4 c5',
+                      ),
+                      lower: Score.simple(
+                        timeSignature: TimeSignature.fourFour,
+                        staffType: StaffType.jianpu,
+                        notes: 'c4:q d4 e4 f4 | g4 a4 b4 c5',
+                      ),
+                    ),
+                    staffGap: 2.0,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         if (index == galleryItems.length + 1) {
           return Card(
             color: Colors.white,

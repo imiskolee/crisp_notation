@@ -315,6 +315,15 @@ class RenderGrandStaffView extends RenderBox {
     _painter.paintLayout(canvas, upper, layout.upper);
     _painter.paintLayout(canvas, lower, layout.lower);
 
+    // Barline connectors and brace join the two staves as one instrument
+    // (a piano grand staff). Skip both when either staff is jianpu: a
+    // mixed standard+jianpu system is two independent renderings of the
+    // same melody that share column alignment — jianpu never bridges
+    // across staves (简谱不需要跨 barline 一起渲染).
+    final hasJianpu = _grandStaff.upper.staffType == StaffType.jianpu ||
+        _grandStaff.lower.staffType == StaffType.jianpu;
+    if (hasJianpu) return;
+
     // Barline connectors: join every full-staff barline of the upper
     // staff down to the lower staff, plus the systemic start line.
     final barPaint = Paint()..color = _theme.staffColor;

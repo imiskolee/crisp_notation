@@ -265,6 +265,84 @@ void main() {
     expect(await bluishPixels(), 0, reason: 'ghost gone after the drop');
   });
 
+  testWidgets('jianpu digits, key label and underlines paint (no staff lines)',
+      (tester) async {
+    await tester.pumpWidget(scene(
+      StaffView(
+        score: Score.simple(
+          notes: 'c4:e d4 e4 f4',
+          timeSignature: TimeSignature.commonTime,
+          staffType: StaffType.jianpu,
+        ),
+        staffSpace: 12,
+      ),
+    ));
+    final staff =
+        tester.renderObject<RenderStaffView>(find.bySubtype<StaffView>());
+    final layout = staff.scoreLayout!;
+    final (image, data) = await capture(tester);
+
+    int darkPixelsIn(math.Rectangle<double> box) {
+      final topLeft =
+          boundaryLocalOf(tester, staff, math.Point(box.left, box.top));
+      final bottomRight =
+          boundaryLocalOf(tester, staff, math.Point(box.right, box.bottom));
+      var hits = 0;
+      for (var y = topLeft.dy.floor(); y <= bottomRight.dy.ceil(); y++) {
+        for (var x = topLeft.dx.floor(); x <= bottomRight.dx.ceil(); x++) {
+          if (colorAt(image, data, x, y).computeLuminance() < 0.5) hits++;
+        }
+      }
+      return hits;
+    }
+
+    // Every digit paints ink inside its hit region.
+    expect(layout.regions, hasLength(4));
+    for (final region in layout.regions) {
+      expect(darkPixelsIn(region.bounds), greaterThan(4),
+          reason: 'digit ${region.elementId} left no ink');
+    }
+
+    // The shared underline paints below the digits.
+    final underline = layout.primitives
+        .whereType<LinePrimitive>()
+        .firstWhere((l) => l.from.y == l.to.y && l.from.y > 3.4);
+    expect(
+      darkPixelsIn(math.Rectangle(
+          underline.from.x, underline.from.y - 0.2, underline.to.x - underline.from.x, 0.4)),
+      greaterThan(4),
+      reason: 'underline missing',
+    );
+
+    // The 1=C key label paints at the left.
+    final label = layout.primitives
+        .whereType<TextPrimitive>()
+        .firstWhere((t) => t.text == '1=C');
+    expect(
+      darkPixelsIn(math.Rectangle(
+          label.position.x - 1.5, label.position.y - 1.6, 3.0, 1.8)),
+      greaterThan(4),
+      reason: 'key label missing',
+    );
+
+    // No staff lines: mid-height between two digits stays white (in staff
+    // notation y = 2 is a staff line spanning the full width).
+    final digits = layout.primitives
+        .whereType<TextPrimitive>()
+        .where((t) => t.position.y == JianpuLayoutEngine.digitBaseline)
+        .toList()
+      ..sort((a, b) => a.position.x.compareTo(b.position.x));
+    final midX =
+        (digits[1].position.x + digits[2].position.x) / 2;
+    final probe = boundaryLocalOf(tester, staff, math.Point(midX, 2.0));
+    expect(
+      near(colorAt(image, data, probe.dx.round(), probe.dy.round()),
+          Colors.white, 16),
+      isTrue,
+      reason: 'a staff line painted inside a jianpu score',
+    );
+  });
+
   testWidgets('kid mode paints visibly bolder staff lines', (tester) async {
     Future<double> darkFraction(CrispNotationTheme theme) async {
       await tester.pumpWidget(scene(

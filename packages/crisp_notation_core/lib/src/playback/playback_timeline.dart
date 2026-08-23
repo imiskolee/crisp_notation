@@ -70,6 +70,126 @@ class PlaybackNote {
 double secondsFor(Fraction wholeNotes, {required double quarterBpm}) =>
     wholeNotes.numerator / wholeNotes.denominator * 4 * 60 / quarterBpm;
 
+/// Converts a whole-note [Fraction] to PPQ ticks (MIDI time). 1 quarter note
+/// = [ticksPerQuarter] ticks (480 by default, the project's MIDI default).
+///
+/// Exact integer arithmetic — no floating point. Rounding is half-up so a
+/// tick boundary matches the equivalent `Fraction` comparison exactly.
+int ticksFor(Fraction wholeNotes, {int ticksPerQuarter = 480}) {
+  final num = wholeNotes.numerator * 4 * ticksPerQuarter;
+  final den = wholeNotes.denominator;
+  return (num + den ~/ 2) ~/ den;
+}
+
+/// One entry of a [tickTimeline]: an element's time span in PPQ ticks.
+///
+/// BPM-independent — the same [PlaybackTickNote] list drives `highlightedIds`
+/// at any tempo; only the tick→seconds conversion at the audio-engine
+/// boundary needs the current BPM. Mirrors [PlaybackNote] but with integer
+/// tick fields for O(1) per-frame lookup without `Fraction` math.
+class PlaybackTickNote {
+  /// The element's id (`e0`, `e1`, …).
+  final String elementId;
+
+  /// Onset in PPQ ticks from the start of playback.
+  final int onTick;
+
+  /// Offset (stop) tick — exclusive, so a note spans `[onTick, offTick)`.
+  final int offTick;
+
+  /// Whether the element is a rest (apps usually skip highlighting).
+  final bool isRest;
+
+  /// Voice the element belongs to: 0 (voice 1) … 3 (voice 4).
+  final int voice;
+
+  /// Index of the measure in `Score.measures` this element came from
+  /// (repeated passes reference the same original measure).
+  final int measureIndex;
+
+  /// Creates a tick timeline entry.
+  const PlaybackTickNote({
+    required this.elementId,
+    required this.onTick,
+    required this.offTick,
+    required this.isRest,
+    required this.voice,
+    required this.measureIndex,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlaybackTickNote &&
+      other.elementId == elementId &&
+      other.onTick == onTick &&
+      other.offTick == offTick &&
+      other.isRest == isRest &&
+      other.voice == voice &&
+      other.measureIndex == measureIndex;
+
+  @override
+  int get hashCode =>
+      Object.hash(elementId, onTick, offTick, isRest, voice, measureIndex);
+
+  @override
+  String toString() =>
+      'PlaybackTickNote($elementId @ $onTick..$offTick, m$measureIndex'
+      '${isRest ? ', rest' : ''}${voice > 0 ? ', v${voice + 1}' : ''})';
+}
+
+/// Flattens [score] into a tick-based timeline sorted by [PlaybackTickNote.onTick]
+/// (ties broken by voice), using PPQ resolution [ticksPerQuarter].
+///
+/// This is the BPM-independent form of [playbackTimeline]: the same tick list
+/// drives `highlightedIds` at any tempo. Convert the audio clock's current
+/// position to ticks via `secondsToTicks` (or use the MIDI engine's tick
+/// position directly), then call [idsAtTick] for the set of element ids to
+/// highlight. See `ticksFor` for the exact rational→integer conversion.
+List<PlaybackTickNote> tickTimeline(
+  Score score, {
+  int ticksPerQuarter = 480,
+  bool expandRepeats = true,
+}) {
+  final frac = playbackTimeline(score, expandRepeats: expandRepeats);
+  final result = [
+    for (final n in frac)
+      PlaybackTickNote(
+        elementId: n.elementId,
+        onTick: ticksFor(n.start, ticksPerQuarter: ticksPerQuarter),
+        offTick: ticksFor(n.end, ticksPerQuarter: ticksPerQuarter),
+        isRest: n.isRest,
+        voice: n.voice,
+        measureIndex: n.measureIndex,
+      ),
+  ];
+  result.sort((a, b) {
+    final byOn = a.onTick.compareTo(b.onTick);
+    if (byOn != 0) return byOn;
+    return a.voice.compareTo(b.voice);
+  });
+  return result;
+}
+
+/// The element ids sounding at [tick] (rests excluded) — the BPM-independent
+/// companion to [soundingAt]. Drives `highlightedIds` from a PPQ tick position.
+Set<String> idsAtTick(List<PlaybackTickNote> timeline, int tick) => {
+      for (final note in timeline)
+        if (!note.isRest && note.onTick <= tick && tick < note.offTick)
+          note.elementId,
+    };
+
+/// Converts PPQ [ticks] to seconds at [quarterBpm]. The inverse of
+/// [secondsToTicks]. Use at the audio-engine boundary to map a tick-based
+/// timeline to wall-clock time.
+double ticksToSeconds(int ticks, {required double quarterBpm, int ticksPerQuarter = 480}) =>
+    ticks / (ticksPerQuarter * quarterBpm / 60);
+
+/// Converts seconds to PPQ ticks at [quarterBpm]. The inverse of
+/// [ticksToSeconds]. Use to map an audio clock's position into the tick
+/// domain for [idsAtTick] lookups.
+int secondsToTicks(double seconds, {required double quarterBpm, int ticksPerQuarter = 480}) =>
+    (seconds * ticksPerQuarter * quarterBpm / 60).round();
+
 /// The sounding MIDI pitch numbers of the note elements in [ids] — for driving
 /// an instrument visualizer (piano keyboard / fretboard) from the playback
 /// cursor's currently-highlighted ids. Each id maps to its

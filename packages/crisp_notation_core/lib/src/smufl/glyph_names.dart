@@ -242,6 +242,11 @@ abstract final class SmuflGlyph {
   /// staff line; the dots land in the middle spaces).
   static const String repeatDots = 'repeatDots';
 
+  /// A single repeat-barline dot (jianpu barlines draw the two dots as
+  /// separate glyphs, the staff's repeat sign being one staff-line-anchored
+  /// glyph).
+  static const String repeatDot = 'repeatDot';
+
   /// Measure-repeat (simile) sign for repeating the previous [count] bar(s):
   /// `repeat1Bar` / `repeat2Bars` / `repeat4Bars`.
   static String measureRepeat(int count) => switch (count) {
@@ -269,6 +274,10 @@ abstract final class SmuflGlyph {
         DynamicLevel.fp => 'dynamicFortePiano',
         DynamicLevel.rf => 'dynamicRinforzando1',
       };
+
+  /// Staccato dot above the note (a named constant for the string
+  /// [articulationGlyph] builds — tests and engines reference it directly).
+  static const String articStaccatoAbove = 'articStaccatoAbove';
 
   /// The articulation glyph for [articulation], in its above/below variant.
   static String articulationGlyph(

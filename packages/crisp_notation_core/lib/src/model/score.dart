@@ -13,10 +13,34 @@ import '../theory/transposition.dart';
 import 'element.dart';
 import 'measure.dart';
 
+/// The notation engine a staff is rendered with (docs/JIANPU.md).
+///
+/// The document model is notation-agnostic — the same pitches and durations
+/// render as any of these; the type only picks the layout engine.
+enum StaffType {
+  /// Common Western staff notation (the default).
+  standard,
+
+  /// Jianpu (numbered musical notation): movable-do digits 1–7.
+  jianpu,
+
+  /// Tablature: fret numbers on a string staff (see `TabLayoutEngine`).
+  tablature,
+
+  /// Percussion staff: standard notation with a percussion clef and
+  /// unpitched (x) noteheads.
+  percussion,
+}
+
 /// A single-staff score: clef, signatures and measures.
 class Score {
   /// The staff's clef.
   final Clef clef;
+
+  /// Which notation engine renders this staff (default [StaffType.standard]).
+  /// Additive: a score that never sets it is byte-identical to one built
+  /// before the field existed.
+  final StaffType staffType;
 
   /// The key signature (default: no sharps or flats).
   final KeySignature keySignature;
@@ -172,6 +196,7 @@ class Score {
   /// Creates a score (treat the lists as immutable).
   const Score({
     required this.clef,
+    this.staffType = StaffType.standard,
     this.keySignature = const KeySignature(0),
     this.timeSignature,
     required this.measures,
@@ -284,6 +309,7 @@ class Score {
   /// Throws a [FormatException] on malformed input.
   factory Score.simple({
     Clef clef = Clef.treble,
+    StaffType staffType = StaffType.standard,
     KeySignature keySignature = const KeySignature(0),
     TimeSignature? timeSignature,
     required String notes,
@@ -590,6 +616,7 @@ class Score {
     }
     return Score(
       clef: clef,
+      staffType: staffType,
       keySignature: keySignature,
       timeSignature: timeSignature,
       // A short opening bar under a known meter is an anacrusis (uncounted).
@@ -725,6 +752,7 @@ class Score {
         };
     return Score(
       clef: clef,
+      staffType: staffType,
       keySignature: _transposedKey(
         keySignature,
         interval,
@@ -890,6 +918,7 @@ class Score {
   /// prove it stays that way when fields are added.
   Score copyWith({
     Clef? clef,
+    StaffType? staffType,
     KeySignature? keySignature,
     TimeSignature? timeSignature,
     List<Measure>? measures,
@@ -937,6 +966,7 @@ class Score {
   }) =>
       Score(
         clef: clef ?? this.clef,
+        staffType: staffType ?? this.staffType,
         keySignature: keySignature ?? this.keySignature,
         timeSignature: timeSignature ?? this.timeSignature,
         measures: measures ?? this.measures,
@@ -987,6 +1017,7 @@ class Score {
   bool operator ==(Object other) =>
       other is Score &&
       other.clef == clef &&
+      other.staffType == staffType &&
       other.keySignature == keySignature &&
       other.timeSignature == timeSignature &&
       listEquals(other.measures, measures) &&
@@ -1066,6 +1097,7 @@ class Score {
           Object.hashAll(rasgueados),
           // Grouped to stay within Object.hash's 20-argument ceiling.
           Object.hash(
+            staffType,
             Object.hashAll(slideInOuts),
             Object.hashAll(pickStrokes),
             Object.hashAll(portamentos),

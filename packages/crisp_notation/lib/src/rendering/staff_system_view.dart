@@ -15,6 +15,12 @@ import 'theme.dart';
 ///
 /// Element taps report ids from any staff via [onElementTap]; keep ids unique
 /// across the staves. Highlighting is repaint-only, like [StaffView].
+///
+/// With `layoutMode = SystemLayoutMode.singleLine` the whole document is
+/// rendered as one continuous system (its natural, unbounded width) — put it
+/// inside a `SingleChildScrollView(scrollDirection: Axis.horizontal)` for the
+/// horizontal-scroll "piano roll" / 卷帘 pattern. A `staffSpace` value must
+/// be provided in this mode (no auto-fit-to-width).
 class StaffSystemView extends LeafRenderObjectWidget {
   /// The staves and their groups.
   final StaffSystem system;
@@ -42,6 +48,37 @@ class StaffSystemView extends LeafRenderObjectWidget {
   /// Called with the element id when the user taps an element.
   final void Function(String elementId)? onElementTap;
 
+  /// How to layout the system into systems (lines).
+  ///
+  /// * [SystemLayoutMode.singleSystem] (default): the legacy behaviour —
+  ///   render the whole `StaffSystem` on exactly one row with its natural
+  ///   width, no line breaks, no horizontal justification. Good for short
+  ///   examples, bracket tests, SATB staves, etc.
+  /// * [SystemLayoutMode.wrapped]: line-break into multi-system rows at the
+  ///   available width, stack them top→bottom, and justify non-final rows.
+  /// * [SystemLayoutMode.singleLine]: never wrap; render every measure as
+  ///   one continuous row. The view has its natural, possibly very wide
+  ///   width — place it inside a `StaffSystemScrollView` or a horizontal
+  ///   scrollable so the reader can pan through it.
+  final SystemLayoutMode layoutMode;
+
+  /// Gap between wrapped systems (lines), in staff spaces. Only used when
+  /// [layoutMode] == [SystemLayoutMode.wrapped].
+  final double systemGap;
+
+  /// Paint every note with its pitch name as text below the staff.
+  final bool showNoteNames;
+
+  /// Append each note's octave to the [showNoteNames] overlay (e.g. F2).
+  final bool showNoteOctaves;
+
+  /// How [showNoteNames] spells each pitch (letter / German / solfège).
+  final NoteNameStyle noteNameStyle;
+
+  /// When true, tapping an element toggles its highlight on/off internally
+  /// — no external [onElementTap] / [highlightedIds] wiring required.
+  final bool tapToHighlight;
+
   /// Creates a staff-system view.
   const StaffSystemView({
     super.key,
@@ -53,6 +90,12 @@ class StaffSystemView extends LeafRenderObjectWidget {
     this.hideEmptyStaves = false,
     this.highlightedIds = const {},
     this.onElementTap,
+    this.layoutMode = SystemLayoutMode.singleSystem,
+    this.systemGap = 8.0,
+    this.showNoteNames = false,
+    this.showNoteOctaves = false,
+    this.noteNameStyle = NoteNameStyle.letter,
+    this.tapToHighlight = false,
   });
 
   @override
@@ -65,6 +108,12 @@ class StaffSystemView extends LeafRenderObjectWidget {
         gridAlign: gridAlign,
         hideEmptyStaves: hideEmptyStaves,
         highlightedIds: highlightedIds,
+        layoutMode: layoutMode,
+        systemGap: systemGap,
+        showNoteNames: showNoteNames,
+        showNoteOctaves: showNoteOctaves,
+        noteNameStyle: noteNameStyle,
+        tapToHighlight: tapToHighlight,
       )..onElementTap = onElementTap;
 
   @override
@@ -78,7 +127,93 @@ class StaffSystemView extends LeafRenderObjectWidget {
       ..gridAlign = gridAlign
       ..hideEmptyStaves = hideEmptyStaves
       ..highlightedIds = highlightedIds
-      ..onElementTap = onElementTap;
+      ..onElementTap = onElementTap
+      ..layoutMode = layoutMode
+      ..systemGap = systemGap
+      ..showNoteNames = showNoteNames
+      ..showNoteOctaves = showNoteOctaves
+      ..noteNameStyle = noteNameStyle
+      ..tapToHighlight = tapToHighlight;
+  }
+}
+
+/// A [StaffSystemView] wrapped in a horizontal scroll container — the whole
+/// score is one continuous row (single-line mode, no line breaks) and the
+/// reader scrolls left/right to read through it (piano-roll / 卷帘 pattern).
+///
+/// One row holds the entire `StaffSystem`, which may be multi-staff (e.g.
+/// a grand-staff piano layout, or piano + jianpu 弹唱谱). `staffSpace`
+/// controls the zoom; it defaults to 8 so a three-staff system fits a phone
+/// height and still has room to scroll horizontally.
+class StaffSystemScrollView extends StatelessWidget {
+  final StaffSystem system;
+  final CrispNotationTheme theme;
+  final double staffSpace;
+  final double staffGap;
+  final bool gridAlign;
+  final bool hideEmptyStaves;
+  final Set<String> highlightedIds;
+  final void Function(String elementId)? onElementTap;
+
+  /// Paint every note with its pitch name as text below the staff.
+  final bool showNoteNames;
+
+  /// Append each note's octave to the [showNoteNames] overlay (e.g. F2).
+  final bool showNoteOctaves;
+
+  /// How [showNoteNames] spells each pitch (letter / German / solfège).
+  final NoteNameStyle noteNameStyle;
+
+  /// When true, tapping an element toggles its highlight on/off internally.
+  final bool tapToHighlight;
+
+  /// How far the scroll controller starts (0 = first measure, null = start).
+  final double? initialScrollOffset;
+
+  /// Optional persistent scroll controller — pass one to control the scroll
+  /// position programmatically (e.g. sync with a playback cursor).
+  final ScrollController? controller;
+
+  const StaffSystemScrollView({
+    super.key,
+    required this.system,
+    this.theme = CrispNotationTheme.standard,
+    this.staffSpace = 8,
+    this.staffGap = 4.0,
+    this.gridAlign = true,
+    this.hideEmptyStaves = false,
+    this.highlightedIds = const {},
+    this.onElementTap,
+    this.showNoteNames = false,
+    this.showNoteOctaves = false,
+    this.noteNameStyle = NoteNameStyle.letter,
+    this.tapToHighlight = false,
+    this.initialScrollOffset,
+    this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      controller: controller,
+      primary: controller == null,
+      child: StaffSystemView(
+        system: system,
+        theme: theme,
+        staffSpace: staffSpace,
+        staffGap: staffGap,
+        gridAlign: gridAlign,
+        hideEmptyStaves: hideEmptyStaves,
+        highlightedIds: highlightedIds,
+        onElementTap: onElementTap,
+        showNoteNames: showNoteNames,
+        showNoteOctaves: showNoteOctaves,
+        noteNameStyle: noteNameStyle,
+        tapToHighlight: tapToHighlight,
+        layoutMode: SystemLayoutMode.singleLine,
+      ),
+    );
   }
 }
 
@@ -93,13 +228,25 @@ class RenderStaffSystemView extends RenderBox {
     required bool gridAlign,
     required bool hideEmptyStaves,
     required Set<String> highlightedIds,
+    required SystemLayoutMode layoutMode,
+    required double systemGap,
+    required bool showNoteNames,
+    required bool showNoteOctaves,
+    required NoteNameStyle noteNameStyle,
+    bool tapToHighlight = false,
   })  : _system = system,
         _theme = theme,
         _staffSpace = staffSpace,
         _staffGap = staffGap,
         _gridAlign = gridAlign,
         _hideEmptyStaves = hideEmptyStaves,
-        _highlightedIds = highlightedIds {
+        _highlightedIds = highlightedIds,
+        _layoutMode = layoutMode,
+        _systemGap = systemGap,
+        _showNoteNames = showNoteNames,
+        _showNoteOctaves = showNoteOctaves,
+        _noteNameStyle = noteNameStyle,
+        _tapToHighlight = tapToHighlight {
     _tap = TapGestureRecognizer(debugOwner: this)..onTapUp = _handleTapUp;
   }
 
@@ -108,6 +255,7 @@ class RenderStaffSystemView extends RenderBox {
 
   late final TapGestureRecognizer _tap;
   StaffSystemLayout? _layout;
+  StaffSystemSystems? _systems;
   double _scale = 12;
 
   late final LayoutPainter _painter = LayoutPainter(
@@ -115,6 +263,18 @@ class RenderStaffSystemView extends RenderBox {
 
   /// Called with the element id when the user taps an element.
   void Function(String elementId)? onElementTap;
+
+  bool _tapToHighlight = false;
+
+  /// When true, tapping an element toggles its highlight on/off without
+  /// requiring an external [onElementTap] / [highlightedIds] wiring.
+  bool get tapToHighlight => _tapToHighlight;
+  set tapToHighlight(bool value) {
+    if (_tapToHighlight == value) return;
+    _tapToHighlight = value;
+    if (!value) _highlightedIds.clear();
+    markNeedsPaint();
+  }
 
   StaffSystem _system;
 
@@ -198,6 +358,59 @@ class RenderStaffSystemView extends RenderBox {
     markNeedsPaint();
   }
 
+  SystemLayoutMode _layoutMode;
+
+  /// Whether this render object wraps its score into multiple systems or
+  /// lays the whole document out as a single continuous row.
+  SystemLayoutMode get layoutMode => _layoutMode;
+  set layoutMode(SystemLayoutMode value) {
+    if (value == _layoutMode) return;
+    _layoutMode = value;
+    markNeedsLayout();
+  }
+
+  double _systemGap;
+
+  /// Gap between wrapped systems (lines), in staff spaces. Only meaningful
+  /// when [layoutMode] == [SystemLayoutMode.wrapped].
+  double get systemGap => _systemGap;
+  set systemGap(double value) {
+    if (value == _systemGap) return;
+    _systemGap = value;
+    if (_layoutMode == SystemLayoutMode.wrapped) markNeedsLayout();
+  }
+
+  bool _showNoteNames;
+
+  /// Paint every note with its pitch name as text below the staff.
+  bool get showNoteNames => _showNoteNames;
+  set showNoteNames(bool value) {
+    if (value == _showNoteNames) return;
+    _showNoteNames = value;
+    markNeedsLayout();
+  }
+
+  bool _showNoteOctaves;
+
+  /// Append each note's octave to the [showNoteNames] overlay (e.g. F2).
+  bool get showNoteOctaves => _showNoteOctaves;
+  set showNoteOctaves(bool value) {
+    if (value == _showNoteOctaves) return;
+    _showNoteOctaves = value;
+    markNeedsLayout();
+  }
+
+  NoteNameStyle _noteNameStyle;
+
+  /// How [showNoteNames] spells each pitch. Changes the overlay text, so
+  /// triggers a relayout.
+  NoteNameStyle get noteNameStyle => _noteNameStyle;
+  set noteNameStyle(NoteNameStyle value) {
+    if (value == _noteNameStyle) return;
+    _noteNameStyle = value;
+    markNeedsLayout();
+  }
+
   /// The laid-out system (for tests / interaction geometry).
   StaffSystemLayout? get systemLayout => _layout;
 
@@ -214,12 +427,61 @@ class RenderStaffSystemView extends RenderBox {
   Size _measure(BoxConstraints constraints) {
     final metadata = MusicFonts.metadataOrNull(_theme.musicFont);
     if (metadata == null) return constraints.smallest;
-    final layout = layoutStaffSystem(
-        _system, LayoutSettings(metadata: metadata),
+    final settings = LayoutSettings(metadata: metadata);
+
+    if (_layoutMode == SystemLayoutMode.wrapped) {
+      // Wrapped: line-break into multi-system rows at the available width,
+      // stack them top→bottom. `maxWidth` is in staff-spaces, so convert
+      // constraints.maxWidth (pixels) → staff spaces.
+      final double widthSpaces = constraints.hasBoundedWidth && _staffSpace != null
+          ? constraints.maxWidth / _staffSpace!
+          : (constraints.hasBoundedWidth ? constraints.maxWidth / 12 : 50000.0);
+      final systems = layoutStaffSystemSystems(
+        _system,
+        settings,
+        maxWidth: widthSpaces,
+        layoutMode: SystemLayoutMode.wrapped,
         staffGap: _staffGap,
         gridAlign: _gridAlign,
-        hideEmptyStaves: _hideEmptyStaves);
+        hideEmptyStaves: _hideEmptyStaves,
+        showNoteNames: _showNoteNames,
+        showNoteOctaves: _showNoteOctaves,
+        noteNameStyle: _noteNameStyle,
+      );
+      _systems = systems;
+      _layout = null;
+      double rowWidthSpaces = 0;
+      double totalHeight = 0;
+      final systemGap = _systemGap;
+      for (var i = 0; i < systems.systems.length; i++) {
+        final w = systems.systems[i].layout.width + leftInset;
+        if (w > rowWidthSpaces) rowWidthSpaces = w;
+        totalHeight += systems.systems[i].layout.height;
+        if (i > 0) totalHeight += systemGap;
+      }
+      if (rowWidthSpaces <= 0) rowWidthSpaces = widthSpaces;
+      _scale = _staffSpace ??
+          (constraints.hasBoundedWidth
+              ? constraints.maxWidth / rowWidthSpaces
+              : 12);
+      _painter.scale = _scale;
+      return constraints
+          .constrain(Size(rowWidthSpaces * _scale, totalHeight * _scale));
+    }
+
+    // singleLine / singleSystem (legacy default): one layout, one row.
+    final layout = layoutStaffSystem(
+      _system,
+      settings,
+      staffGap: _staffGap,
+      gridAlign: _gridAlign,
+      hideEmptyStaves: _hideEmptyStaves,
+      showNoteNames: _showNoteNames,
+      showNoteOctaves: _showNoteOctaves,
+      noteNameStyle: _noteNameStyle,
+    );
     _layout = layout;
+    _systems = null;
     final widthSpaces = layout.width + leftInset;
     _scale = _staffSpace ??
         (constraints.hasBoundedWidth ? constraints.maxWidth / widthSpaces : 12);
@@ -246,15 +508,46 @@ class RenderStaffSystemView extends RenderBox {
 
   void _handleTapUp(TapUpDetails details) {
     final id = elementIdAt(details.localPosition);
-    if (id != null) onElementTap?.call(id);
+    if (id == null) return;
+    if (_tapToHighlight) {
+      // Always work on a mutable copy — the widget may pass a const {}
+      // (unmodifiable set).  Creating a new Set per tap is negligible cost.
+      final mutable = _highlightedIds.toSet();
+      if (mutable.contains(id)) {
+        mutable.remove(id);
+      } else {
+        mutable.add(id);
+      }
+      _highlightedIds = mutable;
+      _painter.highlightedIds = mutable;
+      markNeedsPaint();
+    }
+    onElementTap?.call(id);
   }
 
   /// The element id at [local] pixels, searching every staff.
   String? elementIdAt(Offset local) {
     final layout = _layout;
-    if (layout == null) return null;
+    if (layout != null) {
+      return _hitTestOneLayout(layout, local);
+    }
+    final systems = _systems;
+    if (systems == null) return null;
+    final systemGap = _systemGap;
+    var yCursor = 0.0;
+    for (final sys in systems.systems) {
+      final sysHeight = sys.layout.height * _scale;
+      if (local.dy >= yCursor && local.dy <= yCursor + sysHeight) {
+        return _hitTestOneLayout(sys.layout, local - Offset(0, yCursor));
+      }
+      yCursor += sysHeight + systemGap * _scale;
+    }
+    return null;
+  }
+
+  String? _hitTestOneLayout(StaffSystemLayout layout, Offset local) {
     for (var i = 0; i < layout.staves.length; i++) {
-      final origin = staffOrigin(i);
+      final origin = _staffOriginForLayout(layout, i);
       final p = (local - origin) / _scale;
       for (final region in layout.staves[i].regions) {
         if (region.bounds.containsPoint(math.Point(p.dx, p.dy))) {
@@ -265,33 +558,56 @@ class RenderStaffSystemView extends RenderBox {
     return null;
   }
 
+  /// Pixel origin (where its own y=0 maps) of staff [i] within a single
+  /// [StaffSystemLayout] (no system-row offset applied yet).
+  Offset _staffOriginForLayout(StaffSystemLayout layout, int i) {
+    return Offset(
+      leftInset * _scale,
+      (layout.staffTop(i) - layout.top) * _scale,
+    );
+  }
+
   @override
   void paint(PaintingContext context, Offset offset) {
     final layout = _layout;
-    if (layout == null) return;
-    final canvas = context.canvas;
+    if (layout != null) {
+      _paintOneLayout(context.canvas, offset, layout);
+      return;
+    }
+    final systems = _systems;
+    if (systems == null) return;
+    final systemGap = _systemGap;
+    var yCursor = 0.0;
+    for (final sys in systems.systems) {
+      _paintOneLayout(context.canvas, offset + Offset(0, yCursor), sys.layout);
+      yCursor += sys.layout.height * _scale + systemGap * _scale;
+    }
+  }
+
+  void _paintOneLayout(Canvas canvas, Offset offset, StaffSystemLayout layout) {
     final origins = [
-      for (var i = 0; i < layout.staves.length; i++) offset + staffOrigin(i),
+      for (var i = 0; i < layout.staves.length; i++)
+        offset + _staffOriginForLayout(layout, i),
     ];
     for (var i = 0; i < layout.staves.length; i++) {
       _painter.paintLayout(canvas, origins[i], layout.staves[i]);
     }
     if (layout.staves.length < 2) {
-      _paintBrackets(canvas, origins);
+      _paintBracketsForLayout(canvas, origins, layout);
       return;
     }
 
-    // Connect full-staff barlines within each barline group — the group's top
-    // staff down to its bottom line — breaking in the gaps between groups (the
-    // custom-span barline). A single-staff group draws no systemic connector
-    // (its own per-staff barlines already show). With the default
-    // `connectBarlines: true` and no explicit groups, this is one group over
-    // every staff — the classic continuous systemic barline.
     final barPaint = Paint()..color = _theme.staffColor;
-    final ref = layout.staves.first.primitives.whereType<LinePrimitive>();
+    final refIdx = layout.source.staves
+        .indexWhere((s) => s.staffType != StaffType.jianpu);
+    final ref = (refIdx >= 0
+            ? layout.staves[refIdx]
+            : layout.staves.first)
+        .primitives
+        .whereType<LinePrimitive>();
     final startThickness = ref.isEmpty ? 0.13 : ref.first.thickness;
     final bars = <({double x, double thickness})>[
-      (x: 0.0, thickness: startThickness), // systemic start line
+      (x: 0.0, thickness: startThickness),
       for (final line in ref)
         if (line.from.x == line.to.x &&
             ((line.from.y == 0 && line.to.y == 4) ||
@@ -299,7 +615,7 @@ class RenderStaffSystemView extends RenderBox {
           (x: line.from.x, thickness: line.thickness),
     ];
     for (final group in layout.source.effectiveBarlineGroups) {
-      if (group.first == group.last) continue; // no cross-staff connector
+      if (group.first == group.last) continue;
       final topY = origins[group.first].dy;
       final bottomY = origins[group.last].dy + 4 * _scale;
       for (final bar in bars) {
@@ -308,7 +624,7 @@ class RenderStaffSystemView extends RenderBox {
             barPaint..strokeWidth = bar.thickness * _scale);
       }
     }
-    _paintBrackets(canvas, origins);
+    _paintBracketsForLayout(canvas, origins, layout);
   }
 
   /// How many other brackets strictly contain [b] — its nesting depth. Deeper
@@ -321,19 +637,17 @@ class RenderStaffSystemView extends RenderBox {
           (a.last - a.first) > (b.last - b.first))
       .length;
 
-  void _paintBrackets(Canvas canvas, List<Offset> origins) {
-    final layout = _layout!;
-    // Brackets follow the laid-out system (remapped when staves are hidden).
+  void _paintBracketsForLayout(
+      Canvas canvas, List<Offset> origins, StaffSystemLayout layout) {
     final brackets = layout.source.brackets;
     if (brackets.isEmpty) return;
-    // Innermost sits at the base position; each enclosing level steps left.
-    const step = 0.6; // staff spaces per nesting level
+    const step = 0.6;
     final maxDepth = brackets
         .map((b) => _depthOf(b, brackets))
         .fold(0, (m, d) => d > m ? d : m);
     for (final group in brackets) {
       final shift = (maxDepth - _depthOf(group, brackets)) * step * _scale;
-      final top = origins[group.first].dy; // top line of the first staff
+      final top = origins[group.first].dy;
       final bottom = origins[group.last].dy + 4 * _scale;
       final x = origins.first.dx;
       if (group.kind == StaffBracketKind.brace) {
@@ -352,8 +666,6 @@ class RenderStaffSystemView extends RenderBox {
           );
         }
       } else {
-        // A square bracket: a thick line just left of the staves, with short
-        // horizontal serifs top and bottom.
         final bx = x - 0.5 * _scale - shift;
         final paint = Paint()
           ..color = _theme.staffColor

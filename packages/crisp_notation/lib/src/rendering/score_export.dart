@@ -18,8 +18,18 @@ import 'theme.dart';
 /// `staffSpace` mirror the on-screen views.
 
 const LayoutEngine _engine = LayoutEngine();
+const JianpuLayoutEngine _jianpuEngine = JianpuLayoutEngine();
 const _defaultTextFontFamily =
     "Academico, 'New York', 'Times New Roman', Times, serif";
+
+/// The single-score layout pass, routed by [Score.staffType]
+/// (docs/JIANPU.md §5) — jianpu through the numbered-notation engine,
+/// everything else through the staff engine.
+ScoreLayout _layoutScore(Score score, LayoutSettings settings) =>
+    switch (score.staffType) {
+      StaffType.jianpu => _jianpuEngine.layout(score, settings),
+      _ => _engine.layout(score, settings),
+    };
 
 LayoutSettings _settingsFor(SmuflMetadata metadata, CrispNotationTheme theme) {
   final boost = theme.lineBoost;
@@ -64,7 +74,7 @@ Future<Uint8List> exportScoreToPng(
   Color background = const Color(0xFFFFFFFF),
 }) async {
   final metadata = await _metadata(theme);
-  final layout = _engine.layout(score, _settingsFor(metadata, theme));
+  final layout = _layoutScore(score, _settingsFor(metadata, theme));
   return renderLayoutToPng(
     layout,
     staffSpace: staffSpace,
@@ -86,7 +96,7 @@ Future<String> exportScoreToSvg(
   Map<String, String> elementColors = const {},
 }) async {
   final metadata = await _metadata(theme);
-  final layout = _engine.layout(score, _settingsFor(metadata, theme));
+  final layout = _layoutScore(score, _settingsFor(metadata, theme));
   return scoreToSvg(
     layout,
     staffSpace: staffSpace,

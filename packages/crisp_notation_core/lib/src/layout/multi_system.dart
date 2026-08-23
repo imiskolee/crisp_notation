@@ -465,6 +465,7 @@ StaffSystemSystems layoutStaffSystemSystems(
   StaffSystem document,
   LayoutSettings settings, {
   required double maxWidth,
+  SystemLayoutMode layoutMode = SystemLayoutMode.wrapped,
   double staffGap = 4.0,
   bool justify = true,
   bool gridAlign = true,
@@ -474,6 +475,28 @@ StaffSystemSystems layoutStaffSystemSystems(
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
 }) {
+  if (layoutMode == SystemLayoutMode.singleLine ||
+      layoutMode == SystemLayoutMode.singleSystem) {
+    final n = document.staves.first.measures.length;
+    final layout = layoutStaffSystem(
+      document,
+      settings,
+      staffGap: staffGap,
+      gridAlign: gridAlign,
+      drawTimeSignature: true,
+      finalBarline: true,
+      hideEmptyStaves: hideEmptyStaves,
+      showNoteNames: showNoteNames,
+      showNoteOctaves: showNoteOctaves,
+      noteNameStyle: noteNameStyle,
+    );
+    return StaffSystemSystems(
+      systems: [
+        StaffSystemSystem(layout: layout, firstMeasure: 0, lastMeasure: n - 1)
+      ],
+      maxWidth: layout.width,
+    );
+  }
   if (maxWidth <= 0) {
     throw ArgumentError.value(maxWidth, 'maxWidth', 'must be positive');
   }
@@ -856,3 +879,56 @@ List<Slur> _slurSegmentsForSlice(
   }
   return out;
 }
+
+// ============================================================================
+// Layout modes — legacy single-system, wrapped (multi-line), single-line
+// horizontal scroll (piano roll / 卷帘).
+// ============================================================================
+
+/// How [layoutStaffSystemSystems] assembles the document into systems.
+enum SystemLayoutMode {
+  /// Legacy default for `StaffSystemView`: render the whole document as one
+  /// system with its natural width, no line breaks, no horizontal
+  /// justification — matching the original `layoutStaffSystem()` behaviour.
+  singleSystem,
+
+  /// **Multi-line wrapped layout.** Break the document into systems (lines)
+  /// that fit `maxWidth`, stack them top→bottom, and justify every non-final
+  /// system horizontally. This is the standard engraving layout for a piece
+  /// that does not fit on one row.
+  wrapped,
+
+  /// **Single-line horizontal scroll (piano roll / 卷帘).** No line breaks —
+  /// every measure lives in one continuous system. The returned layout has
+  /// its natural, possibly very wide width and is typically placed inside a
+  /// horizontal scroll view. `maxWidth` is ignored and no justification runs.
+  singleLine,
+}
+
+/// Convenience: lay out a single `StaffSystem` document as one continuous
+/// system with its natural width — equivalent to calling
+/// `layoutStaffSystemSystems(..., layoutMode: singleLine)`. This is the
+/// horizontal-scroll / 卷帘 building block: put the resulting layout into
+/// a horizontal scroll view so the reader pans through one continuous row.
+StaffSystemLayout layoutStaffSystemSingleLine(
+  StaffSystem document,
+  LayoutSettings settings, {
+  double staffGap = 4.0,
+  bool gridAlign = true,
+  bool hideEmptyStaves = false,
+  bool showNoteNames = false,
+  bool showNoteOctaves = false,
+  NoteNameStyle noteNameStyle = NoteNameStyle.letter,
+}) =>
+    layoutStaffSystemSystems(
+      document,
+      settings,
+      maxWidth: double.infinity,
+      layoutMode: SystemLayoutMode.singleLine,
+      staffGap: staffGap,
+      gridAlign: gridAlign,
+      hideEmptyStaves: hideEmptyStaves,
+      showNoteNames: showNoteNames,
+      showNoteOctaves: showNoteOctaves,
+      noteNameStyle: noteNameStyle,
+    ).systems.single.layout;

@@ -187,6 +187,7 @@ class RenderStaffView extends RenderBox {
   }
 
   static const LayoutEngine _engine = LayoutEngine();
+  static const JianpuLayoutEngine _jianpuEngine = JianpuLayoutEngine();
   static const double _fallbackStaffSpace = 12;
 
   late final TapGestureRecognizer _tap;
@@ -402,13 +403,21 @@ class RenderStaffView extends RenderBox {
         12 * space,
       ));
     }
-    final layout = _engine.layout(_score, _settingsFor(metadata),
-        showNoteNames: _showNoteNames,
-        noteNameStyle: _noteNameStyle,
-        showBeatNumbers: _showBeatNumbers,
-        showMeasureNumbers: _showMeasureNumbers,
-        measureNumberInterval: _measureNumberInterval,
-        extraFingerings: _extraFingerings);
+    final settings = _settingsFor(metadata);
+    // Engine routing by notation kind (docs/JIANPU.md §5): a jianpu score
+    // lays out through the numbered-notation engine; everything else keeps
+    // the staff engine. The educational overlays are staff-only, so the
+    // jianpu branch simply ignores them.
+    final layout = switch (_score.staffType) {
+      StaffType.jianpu => _jianpuEngine.layout(_score, settings),
+      _ => _engine.layout(_score, settings,
+          showNoteNames: _showNoteNames,
+          noteNameStyle: _noteNameStyle,
+          showBeatNumbers: _showBeatNumbers,
+          showMeasureNumbers: _showMeasureNumbers,
+          measureNumberInterval: _measureNumberInterval,
+          extraFingerings: _extraFingerings),
+    };
     _layout = layout;
     _scale = _staffSpace ??
         (constraints.hasBoundedWidth

@@ -7,8 +7,7 @@ import 'dart:math' as math;
 
 import '../model/element.dart';
 import '../model/score.dart';
-import 'grand_staff.dart' show alignedColumns;
-import 'layout_engine.dart';
+import 'grand_staff.dart' show alignedColumns, layoutStaff;
 import 'layout_settings.dart';
 import 'score_layout.dart';
 
@@ -124,10 +123,46 @@ class StaffSystem {
   /// empty — a single group spanning every staff (when [connectBarlines]) or
   /// one group per staff (when not). The custom-span barline breaks in the gap
   /// between adjacent groups.
+  ///
+  /// Jianpu staves are **never** joined across staves: their barlines sit on
+  /// their own y = 1..4 row (no staff lines to bridge). So when
+  /// [connectBarlines] is true and the system contains a jianpu staff, the
+  /// single all-staff group is auto-broken at every jianpu boundary — each
+  /// maximal run of adjacent standard staves forms one group, and each
+  /// jianpu staff forms its own single-staff group.
   List<BarlineGroup> get effectiveBarlineGroups {
     if (barlineGroups.isNotEmpty) return barlineGroups;
-    if (connectBarlines) return [BarlineGroup(0, staves.length - 1)];
+    if (connectBarlines) {
+      if (staves.any((s) => s.staffType == StaffType.jianpu)) {
+        return _autoBreakAtJianpu();
+      }
+      return [BarlineGroup(0, staves.length - 1)];
+    }
     return [for (var i = 0; i < staves.length; i++) BarlineGroup(i, i)];
+  }
+
+  /// Splits the staves into barline groups at every jianpu boundary: each
+  /// maximal run of adjacent non-jianpu staves forms one group, and each
+  /// jianpu staff is its own single-staff group.
+  List<BarlineGroup> _autoBreakAtJianpu() {
+    final groups = <BarlineGroup>[];
+    var runStart = -1;
+    for (var i = 0; i < staves.length; i++) {
+      final isJianpu = staves[i].staffType == StaffType.jianpu;
+      if (isJianpu) {
+        if (runStart >= 0) {
+          groups.add(BarlineGroup(runStart, i - 1));
+          runStart = -1;
+        }
+        groups.add(BarlineGroup(i, i));
+      } else if (runStart < 0) {
+        runStart = i;
+      }
+    }
+    if (runStart >= 0) {
+      groups.add(BarlineGroup(runStart, staves.length - 1));
+    }
+    return groups;
   }
 
   /// This system with every transposing staff shown at concert (sounding)
@@ -296,14 +331,20 @@ StaffSystemLayout layoutStaffSystem(
   if (hideEmptyStaves) {
     system = _withEmptyStavesHidden(system);
   }
-  const engine = LayoutEngine();
   // The natural pass carries the same [spacingStretch] as the final pass, so
   // the shared per-measure widths grow with the stretch and the staves stay
-  // aligned (used when wrapping into justified systems).
+  // aligned (used when wrapping into justified systems). Each staff routes
+  // to its own engine (staff vs jianpu) so a mixed system measures each
+  // notation's natural leading and widths correctly.
   final natural = [
     for (final s in system.staves)
-      engine.layout(s, settings,
-          drawTimeSignature: drawTimeSignature, spacingStretch: spacingStretch),
+      layoutStaff(s, settings,
+          leadingWidth: null,
+          measureWidths: null,
+          forcedColumns: null,
+          spacingStretch: spacingStretch,
+          drawTimeSignature: drawTimeSignature,
+          finalBarline: finalBarline),
   ];
 
   final measureCount = natural.first.measureRegions.length;
@@ -338,7 +379,7 @@ StaffSystemLayout layoutStaffSystem(
 
   final staves = [
     for (final s in system.staves)
-      engine.layout(s, settings,
+      layoutStaff(s, settings,
           leadingWidth: leading,
           measureWidths: measureWidths,
           forcedColumns: columns,

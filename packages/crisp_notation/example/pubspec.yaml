@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   crisp_notation:
     path: ../
+  audioplayers: ^5.2.1
 
 dev_dependencies:
   flutter_lints: ^5.0.0
