@@ -74,6 +74,95 @@ void main() {
     });
   });
 
+  group('octave inheritance', () {
+    List<int> octavesOf(Score score) => [
+          for (final m in score.measures)
+            for (final e in m.elements) (e as NoteElement).pitches.single.octave,
+        ];
+
+    test('a pitch without an octave reuses the previous pitch\'s octave', () {
+      expect(octavesOf(Score.simple(notes: 'c4 d e f')), [4, 4, 4, 4]);
+    });
+
+    test('an explicit octave re-anchors the notes that follow', () {
+      expect(octavesOf(Score.simple(notes: 'c4 d e5 g')), [4, 4, 5, 5]);
+    });
+
+    test('the running octave carries across barlines', () {
+      expect(octavesOf(Score.simple(notes: 'c5:q d | e f')), [5, 5, 5, 5]);
+    });
+
+    test('the first pitch defaults to octave 4', () {
+      expect(octavesOf(Score.simple(notes: 'd e')), [4, 4]);
+    });
+
+    test('rests leave the running octave untouched', () {
+      final notes = Score.simple(notes: 'c5 r:e d').measures.single.elements;
+      expect(
+        [for (final e in notes.whereType<NoteElement>()) e.pitches.single.octave],
+        [5, 5],
+      );
+    });
+
+    test('accidentals without octaves inherit too', () {
+      final score = Score.simple(notes: 'c#4 eb f');
+      final pitches = [
+        for (final e in score.measures.single.elements)
+          (e as NoteElement).pitches.single,
+      ];
+      expect(pitches, const [
+        Pitch(Step.c, alter: 1),
+        Pitch(Step.e, alter: -1),
+        Pitch(Step.f),
+      ]);
+    });
+
+    test('chord tones inherit in reading order', () {
+      final score = Score.simple(notes: 'c4+e+g c3+e4+g a');
+      final chords = [
+        for (final e in score.measures.single.elements)
+          (e as NoteElement).pitches,
+      ];
+      expect([for (final p in chords[0]) p.octave], [4, 4, 4]);
+      expect([for (final p in chords[1]) p.octave], [3, 4, 4]);
+      expect(chords[2].single.octave, 4);
+    });
+
+    test('grace notes join the running octave', () {
+      final score = Score.simple(notes: 'c5 {d,e}f:q g');
+      final note =
+          score.measures.single.elements[1] as NoteElement; // f with graces
+      expect([for (final p in note.graceNotes) p.octave], [5, 5]);
+      expect(note.pitches.single.octave, 5);
+      expect(
+        (score.measures.single.elements[2] as NoteElement).pitches.single.octave,
+        5,
+      );
+    });
+
+    test('each voice keeps its own running octave', () {
+      final score = Score.simple(notes: 'c4:q d ; c3:h e | f:h ; g:h');
+      expect(
+        [for (final e in score.measures[0].elements)
+          (e as NoteElement).pitches.single.octave],
+        [4, 4],
+      );
+      expect(
+        [for (final e in score.measures[0].voice2)
+          (e as NoteElement).pitches.single.octave],
+        [3, 3],
+      );
+      expect(
+        (score.measures[1].elements.single as NoteElement).pitches.single.octave,
+        4,
+      );
+      expect(
+        (score.measures[1].voice2.single as NoteElement).pitches.single.octave,
+        3,
+      );
+    });
+  });
+
   group('error reporting', () {
     test('malformed tokens throw FormatException mentioning the token', () {
       const badInputs = {
@@ -81,7 +170,6 @@ void main() {
         'c4:z': 'c4:z',
         'c4:qq': 'c4:qq',
         'c4::q': 'c4::q',
-        'c#:q': 'c#',
         'c4+r:q': 'r',
         '+c4:q': '',
         'c4:.': 'c4:.',

@@ -34,11 +34,29 @@ void main() {
           .where((t) => t.position.y == JianpuLayoutEngine.digitBaseline)
           .map((t) => t.text);
       expect(digits, ['1', '2', '3', '4']);
+      // 行首不画 "1=C 4/4"——简谱默认直接进入数字。
       expect(
         layout.primitives.whereType<TextPrimitive>().map((t) => t.text),
-        contains('1=C'),
+        isNot(contains('1=C')),
       );
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a mid-score key change still draws its 1=X label',
+        (tester) async {
+      final score = Score.simple(
+        notes: 'c4:q d4 e4 f4 | !key=2 c4:q d4 e4 f4',
+        staffType: StaffType.jianpu,
+      );
+      await tester.pumpWidget(wrap(StaffView(score: score, staffSpace: 12)));
+      final layout = tester
+          .renderObject<RenderStaffView>(find.byType(StaffView))
+          .scoreLayout!;
+      // 标签拆为 "1=" 与字母两段文本（升降号是 SMuFL 字形）。
+      final texts =
+          layout.primitives.whereType<TextPrimitive>().map((t) => t.text);
+      expect(texts, contains('1='));
+      expect(texts, contains('D'));
     });
 
     testWidgets('a standard score still draws staff lines (regression guard)',
@@ -81,7 +99,7 @@ void main() {
   });
 
   group('export routing', () {
-    testWidgets('jianpu scores export to SVG with digits and key label',
+    testWidgets('jianpu scores export to SVG with digits and no key label',
         (tester) async {
       final score = Score.simple(
         notes: 'c4:q d4 e4 f4',
@@ -89,7 +107,7 @@ void main() {
       );
       final svg = await tester
           .runAsync(() => exportScoreToSvg(score, embedFont: false));
-      expect(svg!, contains('>1=C<'));
+      expect(svg!, isNot(contains('>1=C<')));
       expect(svg, contains('>1<'));
     });
 

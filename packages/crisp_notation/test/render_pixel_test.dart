@@ -265,7 +265,7 @@ void main() {
     expect(await bluishPixels(), 0, reason: 'ghost gone after the drop');
   });
 
-  testWidgets('jianpu digits, key label and underlines paint (no staff lines)',
+  testWidgets('jianpu digits and underlines paint (no staff lines, no key label)',
       (tester) async {
     await tester.pumpWidget(scene(
       StaffView(
@@ -306,7 +306,7 @@ void main() {
     // The shared underline paints below the digits.
     final underline = layout.primitives
         .whereType<LinePrimitive>()
-        .firstWhere((l) => l.from.y == l.to.y && l.from.y > 3.4);
+        .firstWhere((l) => l.from.y == l.to.y && l.from.y > 3.05);
     expect(
       darkPixelsIn(math.Rectangle(
           underline.from.x, underline.from.y - 0.2, underline.to.x - underline.from.x, 0.4)),
@@ -314,15 +314,13 @@ void main() {
       reason: 'underline missing',
     );
 
-    // The 1=C key label paints at the left.
-    final label = layout.primitives
-        .whereType<TextPrimitive>()
-        .firstWhere((t) => t.text == '1=C');
+    // 行首不画 "1=C"：布局里没有任何调号标签文本。
     expect(
-      darkPixelsIn(math.Rectangle(
-          label.position.x - 1.5, label.position.y - 1.6, 3.0, 1.8)),
-      greaterThan(4),
-      reason: 'key label missing',
+      layout.primitives
+          .whereType<TextPrimitive>()
+          .where((t) => t.text.startsWith('1=')),
+      isEmpty,
+      reason: 'jianpu must not paint a leading key label',
     );
 
     // No staff lines: mid-height between two digits stays white (in staff
@@ -341,6 +339,48 @@ void main() {
       isTrue,
       reason: 'a staff line painted inside a jianpu score',
     );
+  });
+
+  testWidgets('jianpu accidentals paint SMuFL glyph ink (not Unicode text)',
+      (tester) async {
+    await tester.pumpWidget(scene(
+      StaffView(
+        score: Score.simple(
+          notes: 'f#4:q',
+          staffType: StaffType.jianpu,
+        ),
+        staffSpace: 12,
+      ),
+    ));
+    final staff =
+        tester.renderObject<RenderStaffView>(find.bySubtype<StaffView>());
+    final layout = staff.scoreLayout!;
+    final sharp = layout.primitives
+        .whereType<GlyphPrimitive>()
+        .firstWhere((g) => g.smuflName == SmuflGlyph.accidentalSharp);
+    final (image, data) = await capture(tester);
+    // Sample the glyph's ink bounding box (staff spaces → pixels).
+    final box = MusicFonts.metadataOrNull(MusicFont.bravura)!
+        .bBoxOf(SmuflGlyph.accidentalSharp);
+    final topLeft = boundaryLocalOf(
+      tester,
+      staff,
+      math.Point(sharp.position.x + box.swX * sharp.scale,
+          sharp.position.y - box.neY * sharp.scale),
+    );
+    final bottomRight = boundaryLocalOf(
+      tester,
+      staff,
+      math.Point(sharp.position.x + box.neX * sharp.scale,
+          sharp.position.y - box.swY * sharp.scale),
+    );
+    var dark = 0;
+    for (var y = topLeft.dy.floor(); y <= bottomRight.dy.ceil(); y++) {
+      for (var x = topLeft.dx.floor(); x <= bottomRight.dx.ceil(); x++) {
+        if (colorAt(image, data, x, y).computeLuminance() < 0.5) dark++;
+      }
+    }
+    expect(dark, greaterThan(4), reason: 'accidental sharp left no ink');
   });
 
   testWidgets('kid mode paints visibly bolder staff lines', (tester) async {

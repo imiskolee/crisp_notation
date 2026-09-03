@@ -253,7 +253,7 @@ class Score {
   /// token    := rest | chord
   /// rest     := 'r' (':' duration)?
   /// chord    := pitch ('+' pitch)* (':' duration)?
-  /// pitch    := stepLetter accidental? octaveDigit(s)     // see Pitch.parse
+  /// pitch    := stepLetter accidental? octave?            // see below
   /// duration := ('w'|'h'|'q'|'e'|'s'|'t'|'x'|'b') ('.' | '..')?
   /// ```
   ///
@@ -261,6 +261,11 @@ class Score {
   ///   token's duration (initially quarter). `w h q e s t x` are whole
   ///   down to sixty-fourth and `b` is a breve; dots follow the letter
   ///   (`q.` = dotted quarter).
+  /// - Octaves are sticky too: a pitch written without an octave reuses the
+  ///   previous pitch's octave in the same voice (initially 4), so
+  ///   `c4 d e f` == `c4 d4 e4 f4` and `c4 d e5 g` == `c4 d4 e5 g5`.
+  ///   Chord tones count in reading order (`c4+e+g` == `c4+e4+g4`); rests
+  ///   carry no octave and leave the running value untouched.
   /// - A trailing `~` ties the note/chord to the next note element
   ///   (`c4:q~ c4:q`), also across a barline.
   /// - A trailing `(` opens a slur on this note and a trailing `)` closes
@@ -272,6 +277,10 @@ class Score {
   ///   `c4:q>'`).
   /// - Ornament markers (one per note, drawn above): `%` trill, `\$`
   ///   short trill (upper mordent), `&` mordent, `?` turn.
+  /// - Technique marks (combinable, jianpu-only rendering): `/` 上滑音
+  ///   (slide up), `\` 下滑音 (slide down), `H` 回滑音 (return slide),
+  ///   `R` 揉弦 (vibrato), `P` 拨弦 (pizzicato), `*` 花舌 (flutter tongue),
+  ///   `L` 厉音 (hard attack), `V` 换气 (breath), `T` 吐音 (tonguing).
   /// - Fingering: an `=` suffix with one digit (`c4:q=3`) or a
   ///   comma-separated list for a chord (`c4+e4+g4:h=1,3,5`); may sit
   ///   before other trailing markers (`c4:q=2~`).
@@ -290,6 +299,12 @@ class Score {
   /// - `3[c4:e d4 e4]` groups a tuplet: `actual[`…`]` or `actual:normal[`
   ///   (default `normal` = the largest power of two below `actual`, and 3
   ///   for duplets). Tuplets cannot cross barlines or nest.
+  /// - A pitch written without an accidental inherits the key signature's
+  ///   alteration for its step: under a 3-flat key (`!key=-3` or
+  ///   `keySignature: KeySignature(-3)`), `b4` is B♭4 and sounds/renders
+  ///   as such with no accidental drawn. An explicit suffix (`#`, `b`,
+  ///   `n`, `##`, `bb`) always overrides the key signature. A `!key=`
+  ///   directive re-keys the notes that follow it.
   /// - The accidental `n` parses as an explicit natural and forces the
   ///   accidental to be drawn (`showAccidental: true`).
   /// - Every element is auto-assigned the id `e0`, `e1`, … in reading order,
@@ -320,6 +335,10 @@ class Score {
   }) {
     var duration = NoteDuration.quarter;
     var nextId = 0;
+    var currentKey = keySignature;
+    // Running octave per voice for octave-less pitches; persists across
+    // barlines so `c4 d | e f` stays in octave 4.
+    final lastOctaveByVoice = <int, int>{};
     final measures = <Measure>[];
     final slurs = <Slur>[];
     String? openSlurStart;
@@ -372,6 +391,7 @@ class Score {
                 throw FormatException('Invalid key directive: "$token"');
               }
               keyChange = KeySignature(fifths);
+              currentKey = keyChange;
             } else if (directive.startsWith('time=')) {
               final match = RegExp(
                 r'^(\d+)/(\d+)$',
@@ -450,6 +470,7 @@ class Score {
           var closesTuplet = false;
           Ornament? ornament;
           final articulations = <Articulation>{};
+          final techniques = <TechniqueMark>{};
           var stripping = true;
           while (stripping && token.isNotEmpty) {
             switch (token[token.length - 1]) {
@@ -492,6 +513,33 @@ class Score {
               case '?':
                 ornament = Ornament.turn;
                 token = token.substring(0, token.length - 1);
+              case '/':
+                techniques.add(TechniqueMark.slideUp);
+                token = token.substring(0, token.length - 1);
+              case r'\':
+                techniques.add(TechniqueMark.slideDown);
+                token = token.substring(0, token.length - 1);
+              case 'H':
+                techniques.add(TechniqueMark.slideReturn);
+                token = token.substring(0, token.length - 1);
+              case 'R':
+                techniques.add(TechniqueMark.vibrato);
+                token = token.substring(0, token.length - 1);
+              case 'P':
+                techniques.add(TechniqueMark.pizzicato);
+                token = token.substring(0, token.length - 1);
+              case '*':
+                techniques.add(TechniqueMark.flutterTongue);
+                token = token.substring(0, token.length - 1);
+              case 'L':
+                techniques.add(TechniqueMark.sharpTongue);
+                token = token.substring(0, token.length - 1);
+              case 'V':
+                techniques.add(TechniqueMark.breath);
+                token = token.substring(0, token.length - 1);
+              case 'T':
+                techniques.add(TechniqueMark.tonguing);
+                token = token.substring(0, token.length - 1);
               default:
                 stripping = false;
             }
@@ -503,9 +551,17 @@ class Score {
             if (inner.isEmpty) {
               throw FormatException('Empty grace group: "$token"');
             }
-            graceNotes = [
-              for (final source in inner.split(',')) Pitch.parse(source.trim()),
-            ];
+            final graces = <Pitch>[];
+            for (final source in inner.split(',')) {
+              final p = _parseKeyedPitch(
+                source.trim(),
+                currentKey,
+                lastOctaveByVoice[voiceIndex],
+              );
+              graces.add(p);
+              lastOctaveByVoice[voiceIndex] = p.octave;
+            }
+            graceNotes = graces;
             token = token.substring(graceMatch[0]!.length);
           }
           final parts = token.split(':');
@@ -528,6 +584,11 @@ class Score {
                 'A rest cannot carry articulations: "$token"',
               );
             }
+            if (techniques.isNotEmpty) {
+              throw FormatException(
+                'A rest cannot carry technique marks: "$token"',
+              );
+            }
             if (graceNotes.isNotEmpty) {
               throw FormatException(
                 'A rest cannot carry grace notes: "$token"',
@@ -539,7 +600,16 @@ class Score {
             target.add(RestElement(duration, id: id));
           } else {
             final sources = parts[0].split('+');
-            final pitches = sources.map(Pitch.parse).toList();
+            final pitches = <Pitch>[];
+            for (final source in sources) {
+              final p = _parseKeyedPitch(
+                source,
+                currentKey,
+                lastOctaveByVoice[voiceIndex],
+              );
+              pitches.add(p);
+              lastOctaveByVoice[voiceIndex] = p.octave;
+            }
             final forced = sources.any(_hasExplicitNatural);
             target.add(
               NoteElement(
@@ -550,6 +620,7 @@ class Score {
                 articulations: articulations,
                 graceNotes: graceNotes,
                 ornament: ornament,
+                techniques: techniques,
                 fingerings: fingerings,
                 id: id,
               ),
@@ -688,6 +759,33 @@ class Score {
 
   static bool _hasExplicitNatural(String pitchSource) =>
       RegExp(r'^[a-gA-G]n').hasMatch(pitchSource.trim());
+
+  static final _octavelessPitch = RegExp(r'^[a-gA-G](##|bb|#|b|n)?$');
+
+  /// Parses [source] like [Pitch.parse], but a pitch written without an
+  /// accidental suffix inherits [key]'s alteration for its step — the key
+  /// signature is what makes `b4` in E♭ major a B♭. An explicit suffix
+  /// (`#`, `b`, `n`, `##`, `bb`) always wins. A pitch written without an
+  /// octave takes [inheritedOctave] (the running octave of its voice), or 4
+  /// when no pitch came before it.
+  static Pitch _parseKeyedPitch(
+    String source,
+    KeySignature key, [
+    int? inheritedOctave,
+  ]) {
+    var src = source.trim();
+    if (_octavelessPitch.hasMatch(src)) {
+      src = '$src${inheritedOctave ?? 4}';
+    }
+    final pitch = Pitch.parse(src);
+    if (RegExp(r'^[a-gA-G](##|bb|#|b|n)').hasMatch(src)) {
+      return pitch;
+    }
+    final implied = key.alterFor(pitch.step);
+    return implied == 0
+        ? pitch
+        : Pitch(pitch.step, alter: implied, octave: pitch.octave);
+  }
 
   static const Map<String, DurationBase> _durationLetters = {
     'w': DurationBase.whole,

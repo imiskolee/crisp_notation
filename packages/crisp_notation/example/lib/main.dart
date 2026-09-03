@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:crisp_notation/crisp_notation.dart';
 
+import 'dsl_editor.dart';
 import 'gallery.dart';
 import 'interactive.dart';
+import 'jianpu_debug.dart';
+import 'jianpu_iso_gallery.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(title: const Text('crisp_notation')),
       body: switch (_index) {
         0 => const GalleryScreen(),
-        _ => const InteractiveScreen(),
+        1 => const InteractiveScreen(),
+        2 => const JianpuDebugPage(),
+        3 => const JianpuIsoGalleryPage(),
+        _ => const DslEditorPage(),
       },
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -52,6 +58,18 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.touch_app),
             label: 'Interactive',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.music_note),
+            label: '简谱调试',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.menu_book),
+            label: '简谱规范',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.school),
+            label: 'Score Editor',
           ),
         ],
       ),

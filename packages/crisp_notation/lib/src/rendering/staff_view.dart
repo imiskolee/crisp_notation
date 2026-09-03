@@ -69,6 +69,12 @@ class StaffView extends LeafRenderObjectWidget {
   /// [kFingeringThumb]; drawn after any [NoteElement.fingerings] on the note.
   final Map<String, List<int>> extraFingerings;
 
+  /// Jianpu only: draw the leading "1=X 4/4" header (key label + time
+  /// signature). Off by default — jianpu strips go straight into the digits;
+  /// mid-score key/time changes always draw regardless. Staff notation is
+  /// unaffected (its key/time signatures always draw).
+  final bool showJianpuHeader;
+
   /// Creates a staff view.
   const StaffView({
     super.key,
@@ -85,6 +91,7 @@ class StaffView extends LeafRenderObjectWidget {
     this.onElementTap,
     this.noteheadScheme = NoteheadScheme.normal,
     this.extraFingerings = const {},
+    this.showJianpuHeader = false,
   });
 
   @override
@@ -101,6 +108,7 @@ class StaffView extends LeafRenderObjectWidget {
         measureNumberInterval: measureNumberInterval,
         noteheadScheme: noteheadScheme,
         extraFingerings: extraFingerings,
+        showJianpuHeader: showJianpuHeader,
       )..onElementTap = onElementTap;
 
   @override
@@ -118,6 +126,7 @@ class StaffView extends LeafRenderObjectWidget {
       ..measureNumberInterval = measureNumberInterval
       ..noteheadScheme = noteheadScheme
       ..extraFingerings = extraFingerings
+      ..showJianpuHeader = showJianpuHeader
       ..onElementTap = onElementTap;
   }
 }
@@ -171,6 +180,7 @@ class RenderStaffView extends RenderBox {
     int measureNumberInterval = 1,
     NoteheadScheme noteheadScheme = NoteheadScheme.normal,
     Map<String, List<int>> extraFingerings = const {},
+    bool showJianpuHeader = false,
   })  : _score = score,
         _theme = theme,
         _staffSpace = staffSpace,
@@ -182,7 +192,8 @@ class RenderStaffView extends RenderBox {
         _showMeasureNumbers = showMeasureNumbers,
         _measureNumberInterval = measureNumberInterval,
         _noteheadScheme = noteheadScheme,
-        _extraFingerings = extraFingerings {
+        _extraFingerings = extraFingerings,
+        _showJianpuHeader = showJianpuHeader {
     _tap = TapGestureRecognizer(debugOwner: this)..onTapUp = _handleTapUp;
   }
 
@@ -360,6 +371,16 @@ class RenderStaffView extends RenderBox {
     markNeedsLayout();
   }
 
+  bool _showJianpuHeader;
+
+  /// Jianpu only: draw the leading "1=X 4/4" header. Relayouts.
+  bool get showJianpuHeader => _showJianpuHeader;
+  set showJianpuHeader(bool value) {
+    if (value == _showJianpuHeader) return;
+    _showJianpuHeader = value;
+    markNeedsLayout();
+  }
+
   GhostNote? _ghostNote;
 
   /// Ghost-note preview; repaint only.
@@ -409,7 +430,9 @@ class RenderStaffView extends RenderBox {
     // the staff engine. The educational overlays are staff-only, so the
     // jianpu branch simply ignores them.
     final layout = switch (_score.staffType) {
-      StaffType.jianpu => _jianpuEngine.layout(_score, settings),
+      StaffType.jianpu => _jianpuEngine.layout(_score, settings,
+          drawKeyLabelText: _showJianpuHeader,
+          drawTimeSignature: _showJianpuHeader),
       _ => _engine.layout(_score, settings,
           showNoteNames: _showNoteNames,
           noteNameStyle: _noteNameStyle,

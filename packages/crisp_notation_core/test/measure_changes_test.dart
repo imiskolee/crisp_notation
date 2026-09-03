@@ -139,8 +139,8 @@ void main() {
             .where((g) => g.smuflName == 'timeSig3'),
         hasLength(1),
       );
-      // Measure 1 merges to 2 beams (4/4); measure 2 beams per beat (3).
-      expect(layout.primitives.whereType<BeamPrimitive>(), hasLength(5));
+      // Both measures beam per beat: 4 groups in 4/4, 3 in 3/4.
+      expect(layout.primitives.whereType<BeamPrimitive>(), hasLength(7));
     });
   });
 

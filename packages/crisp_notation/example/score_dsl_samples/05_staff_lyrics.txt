@@ -1,0 +1,15 @@
+---score
+title: 送别
+authors: 李叔同
+scale: C
+timeSignature: 4/4
+tempo: 72
+tracks:
+  - name: 旋律
+    type: standard
+    clef: treble
+---
+:旋律
+notes: g4:e. c4:s c4:q d4:q e4:q c4:q c4:h | g4:e. c4:s c4:q d4:q e4:q c4:q c4:h | d4:e. d4:s d4:q e4:q g4:q e4:q d4:q c4:q | g4:e. g4:s g4:q e4:q g4:q c4:q c4:h
+lyrics: 长 亭 外 古 道 边 芳 草 碧 连 天 晚 风 拂 柳 笛 声 残 夕 阳 山 外 山
+lyrics2: 天 之 涯 地 之 角 知 交 半 零 落 一 瓢 浊 酒 尽 余 欢 今 宵 别 梦 寒

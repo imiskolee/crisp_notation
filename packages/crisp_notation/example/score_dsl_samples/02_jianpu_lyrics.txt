@@ -1,0 +1,14 @@
+---score
+title: 欢乐颂
+authors: 贝多芬
+scale: Bb
+timeSignature: 4/4
+tempo: 80
+tracks:
+  - name: 合唱
+    type: jianpu
+---
+:合唱
+notes: e4:q e4 f4 g4 | g4:q f4 e4 d4 | c4:q c4 d4 e4 | e4:q. d4:e d4:h | e4:q e4 f4 g4 | g4:q f4 e4 d4 | c4:q c4 d4 e4 | d4:q. c4:e c4:h
+lyrics: 欢 乐 女 神 圣 洁 美 丽 你 的 光 芒 照 大 地
+lyrics2: 灿 烂 星 光 照 大 地 我 们 充 满 欢 乐 和 喜

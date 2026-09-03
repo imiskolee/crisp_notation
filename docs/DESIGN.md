@@ -76,13 +76,16 @@ terse is fine. Active roadmap coordination lives in PLAN.md.
   0.75), but never closer than `minNoteGap` after the element's ink.
   `log2` of the dot factors is a 3-entry constant table, keeping layout
   bit-for-bit deterministic (rule 14) without transcendental calls.
-- **Beam grouping** (rule 7): groups form per `1/beatUnit` window, never
-  across rests or windows. In even-numerator x/4 meters, adjacent
-  all-eighth groups in the same half-measure merge — this yields the
-  contract's "8 eighths in 4/4 = 2 beams" while 3/4 stays per-beat.
-  Compound 6/8 grouping (3+3) is out of scope v0.1 ("simple-meter grouping
-  only"): in x/8 meters each eighth is its own window, so eighths get
-  flags. Unmetered scores group per quarter window.
+- **Beam grouping** (rule 7): groups form per metric window, never across
+  rests or windows, with no half-measure merging — one group per beat in
+  simple meters (8 eighths in 4/4 = 4 beams), per component in compound
+  (6/8 = 3+3) and additive (3+2/8) meters, and a single whole-measure group
+  in 3/8-type meters. Unmetered scores group per quarter window. Staff
+  beams and jianpu 减时线 share one implementation
+  (`layout/beam_grouping.dart`: `beamGroupBoundaries` + `computeBeamRuns`,
+  with role beamable/transparent/breaker per element — a staff rest is
+  transparent, a jianpu short rest is beamable since it carries its own
+  underline).
 - **Beam geometry**: slant = `clamp((refY_last − refY_first)/2, ±1)`,
   intercept chosen so every stem keeps ≥ default length (min/max over the
   group), then shifted so the beam never crosses the middle line from the
@@ -181,7 +184,8 @@ terse is fine. Active roadmap coordination lives in PLAN.md.
   qualities, fraction algebra laws.
 - **Layout edge suite** (`layout_edge_test.dart`): stem-direction sweep
   over all 21 staff positions × both clefs, beaming edge cases (beamlets,
-  beat boundaries, 2/4 merge, x/8 flags-only fallback, 5/4, unmetered),
+  beat boundaries, 2/4 per-beat groups, 3/8 whole-measure group, 5/4,
+  unmetered),
   accidental bookkeeping incl. `showAccidental: false` state semantics,
   chord clusters/whole-note seconds/ledger spans, spacing monotonicity,
   barline/measure-region counts, per-corpus determinism.
@@ -247,10 +251,10 @@ terse is fine. Active roadmap coordination lives in PLAN.md.
 - **Tuplet spacing** uses `log(normal/actual)/ln2` at layout time — the
   only transcendental call in the engine; it is deterministic for equal
   inputs on a given platform, which is what rule 14 needs in practice.
-- **Beams never cross tuplet boundaries** (run building and the
-  half-measure merge both check span membership). The golden corpus
-  caught the original violation: the merge welded a c5–e5 triplet to a
-  following low eighth and flipped the whole group's stems.
+- **Beams never cross tuplet boundaries** (run building checks span
+  membership). The golden corpus caught the original violation: the (since
+  removed) half-measure merge welded a c5–e5 triplet to a following low
+  eighth and flipped the whole group's stems.
 
 ## v0.3.8 mid-score changes (2026-07-10)
 

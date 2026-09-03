@@ -1,0 +1,25 @@
+---score
+title: 茉莉花
+description: 钢琴弹唱
+timeSignature: 2/4
+tempo: 70
+scale: Eb
+tracks:
+  - name: piano_right
+    type: standard
+    clef: treble
+  - name: piano_left
+    type: standard
+    clef: bass
+  - name: 独唱
+    type: jianpu
+---
+
+:piano_right
+notes: g4:s=1( f4 g4 b4=2 c5 b4 e5 c5 | b4=2 g4 b4:q c5:e=1) | e5:e=3( f5:s g5 f5 e5 c5 e5 | b4:h) | b4:s=2( g4 b4:e c5:e=1 | e5:e=3 f:s g e=3 c=1 b4:e=2) |
+
+:piano_left
+notes: e2:e=5 b2=2 g3 e3=2 | e2:e b2 g3 e3 | f2 c3 a3 f3 | b2 f3 d4 b3 |  e2:e b2 g3 e3 |  e2:e b2 g3 e3
+
+:独唱
+notes: r:q r:q | r:q r:q | r:q r:q | r:q r:q |  r:q r:q | r:q r:q|

@@ -16,6 +16,7 @@ import '../theory/fraction.dart';
 import '../theory/key_signature.dart';
 import '../theory/pitch.dart';
 import '../theory/time_signature.dart';
+import 'beam_grouping.dart';
 import 'layout_settings.dart';
 import 'score_layout.dart';
 

@@ -157,10 +157,10 @@ void main() {
         timeSignature: TimeSignature.fourFour,
         notes: 'c4:e d4 e4 f4 | g3+c4:h bn3:q r:q',
       ));
-      // Four eighths filling the first half of 4/4 merge into one beam.
+      // Four eighths in 4/4 beam per beat: two groups of two.
       expect(
         layout.primitives.whereType<BeamPrimitive>(),
-        hasLength(1),
+        hasLength(2),
       );
       // The Bn needs its natural (key has Bb).
       final naturals = glyphsNamed(layout, SmuflGlyph.accidentalNatural)

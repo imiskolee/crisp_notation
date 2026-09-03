@@ -14,6 +14,8 @@ dependencies:
   crisp_notation:
     path: ../
   audioplayers: ^5.2.1
+  provider: ^6.1.2
+  file_picker: ^8.0.0
 
 dev_dependencies:
   flutter_lints: ^5.0.0

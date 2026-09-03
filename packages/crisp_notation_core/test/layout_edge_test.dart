@@ -107,13 +107,35 @@ void main() {
       expect(flagsOf(layout), hasLength(1));
     });
 
-    test('2/4 with four eighths merges into one beam', () {
+    test('2/4 with four eighths beams per beat (2 groups)', () {
       final layout = layoutOf(Score.simple(
         timeSignature: TimeSignature.twoFour,
         notes: 'c5:e d5 e5 f5',
       ));
-      expect(beamsOf(layout), hasLength(1));
+      // Per-beat groups, matching jianpu 减时线 — no half-measure merge.
+      expect(beamsOf(layout), hasLength(2));
       expect(stemsOf(layout), hasLength(4));
+    });
+
+    test('3/8 beams the whole measure as one group', () {
+      final layout = layoutOf(Score.simple(
+        timeSignature: const TimeSignature(3, 8),
+        notes: 'c5:e d5 e5',
+      ));
+      // Same whole-measure group as the jianpu 减时线 (GB/T 46845-2025
+      // §6.3.5.3) — one beam, no flags.
+      expect(beamsOf(layout), hasLength(1));
+      expect(flagsOf(layout), isEmpty);
+    });
+
+    test('3/8 sixteenths break secondary beams at each eighth', () {
+      final layout = layoutOf(Score.simple(
+        timeSignature: const TimeSignature(3, 8),
+        notes: 'c5:s d5 e5 f5 g5 a5',
+      ));
+      // One continuous primary over the whole measure + 3 secondary segments
+      // (one per eighth-note pulse).
+      expect(beamsOf(layout), hasLength(4));
     });
 
     test('6/8 beams in two groups of three (compound grouping)', () {

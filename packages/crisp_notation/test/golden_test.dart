@@ -1355,9 +1355,12 @@ void main() {
 
   testWidgets('75 four-staff system (SATB) with a bracket', (tester) async {
     final system = StaffSystem([
+      // The F naturals are written with explicit `n` so this layout scenario
+      // sounds the same pitches it always did: bare letters now inherit the
+      // key signature (f → F♯ in G major).
       Score.simple(
           clef: Clef.treble,
-          notes: 'c5:q d5 e5 f5 | g5:h a5:h',
+          notes: 'c5:q d5 e5 fn5 | g5:h a5:h',
           keySignature: const KeySignature(1)),
       Score.simple(
           clef: Clef.treble,
@@ -1365,7 +1368,7 @@ void main() {
           keySignature: const KeySignature(1)),
       Score.simple(
           clef: Clef.bass,
-          notes: 'e3:q f3 g3 a3 | d3:h e3:h',
+          notes: 'e3:q fn3 g3 a3 | d3:h e3:h',
           keySignature: const KeySignature(1)),
       Score.simple(
           clef: Clef.bass,

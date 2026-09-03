@@ -89,6 +89,54 @@ void main() {
       expect(elements[2].showAccidental, isTrue);
     });
 
+    test('pitches without an accidental inherit the key signature', () {
+      // E♭ major: B♭, E♭, A♭.
+      final score = Score.simple(
+        keySignature: const KeySignature(-3),
+        notes: 'b4:q e5 a4 c5 bn4 bb4',
+      );
+      final elements = score.measures.first.elements.cast<NoteElement>();
+      expect(elements[0].pitches.single, const Pitch(Step.b, alter: -1));
+      expect(
+        elements[1].pitches.single,
+        const Pitch(Step.e, alter: -1, octave: 5),
+      );
+      expect(elements[2].pitches.single, const Pitch(Step.a, alter: -1));
+      // C is unaltered in E♭ major.
+      expect(elements[3].pitches.single, const Pitch(Step.c, octave: 5));
+      // An explicit suffix always wins over the key signature.
+      expect(elements[4].pitches.single, const Pitch(Step.b));
+      expect(elements[4].showAccidental, isTrue);
+      expect(elements[5].pitches.single, const Pitch(Step.b, alter: -1));
+    });
+
+    test('a !key= directive re-keys the notes that follow it', () {
+      final score = Score.simple(notes: 'f4:q | !key=1 f4 | f4 !key=0 f4');
+      NoteElement noteAt(int m, int i) =>
+          score.measures[m].elements[i] as NoteElement;
+      // C major: F natural.
+      expect(noteAt(0, 0).pitches.single, const Pitch(Step.f));
+      // G major from the directive on: F♯.
+      expect(noteAt(1, 0).pitches.single, const Pitch(Step.f, alter: 1));
+      expect(score.measures[1].keyChange, const KeySignature(1));
+      // The directive takes effect where it stands: the first f keeps G
+      // major's F♯, the second is back to C major's F natural.
+      expect(noteAt(2, 0).pitches.single, const Pitch(Step.f, alter: 1));
+      expect(noteAt(2, 1).pitches.single, const Pitch(Step.f));
+    });
+
+    test('grace notes inherit the key signature', () {
+      final score = Score.simple(
+        keySignature: const KeySignature(-1), // F major: B♭
+        notes: '{b4,f#5}c5:q',
+      );
+      final note = score.measures.first.elements.single as NoteElement;
+      expect(note.graceNotes, const [
+        Pitch(Step.b, alter: -1),
+        Pitch(Step.f, alter: 1, octave: 5),
+      ]);
+    });
+
     test('ids are assigned in reading order across measures', () {
       final score = Score.simple(notes: 'c4:q d4 | r e4');
       final ids = [

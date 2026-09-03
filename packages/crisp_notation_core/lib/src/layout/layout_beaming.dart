@@ -22,10 +22,6 @@ extension _Beaming on _LayoutBuilder {
     );
   }
 
-  /// Rule 7: group eighths/sixteenths within a beat (simple meter). In
-  /// even x/4 meters, adjacent all-eighth beat groups within the same half
-  /// measure merge (so 8 eighths in 4/4 yield 2 beams). No beaming across
-  /// rests or beat boundaries.
   /// Resolves each [CrossMeasureBeam] to the note ids it spans (from its start
   /// through its end, across barlines) and the group's stem direction, so those
   /// notes are excluded from per-measure beaming and beamed together later.
@@ -80,40 +76,18 @@ extension _Beaming on _LayoutBuilder {
     }
   }
 
+  /// Rule 7: group eighths/sixteenths per metric window — the shared
+  /// `computeBeamRuns` (beam_grouping.dart), identical to the jianpu 减时线
+  /// grouping. One beam group per beat in simple meters (no half-measure
+  /// merging), per component in compound/additive meters, whole-measure in
+  /// 3/8-type meters, quarter-note windows when unmetered. No beaming across
+  /// beat boundaries; a rest neither joins nor breaks a run.
   List<_BeamGroup> _computeBeamGroups(
     List<MusicElement> elements, {
     required Fraction Function(int index) effectiveAt,
     required List<TupletSpan> tuplets,
     bool? forcedStemsDown,
   }) {
-    final time = _time;
-    // Unmetered scores group per quarter-note window.
-    final span = time == null ? Fraction(1, 4) : Fraction(1, time.beatUnit);
-    final halfSpan = Fraction(1, 2);
-
-    // Beam-group boundaries (cumulative onsets) for the current meter — one per
-    // group start. A note's beam window is the index of the group its onset
-    // falls in. For a simple meter these boundaries are the beats, so this is
-    // identical to `_LayoutBuilder._windowIndex(onset, 1/beatUnit)`; compound (6/8, 9/8, 12/8)
-    // and additive (3+2/8) meters group in threes / by their components.
-    final boundaries = <Fraction>[];
-    if (time != null) {
-      var acc = Fraction.zero;
-      for (final g in time.beamGroups()) {
-        boundaries.add(acc);
-        acc += g;
-      }
-    }
-    int windowOf(Fraction onset) {
-      if (time == null) return _LayoutBuilder._windowIndex(onset, span);
-      var idx = 0;
-      for (var b = 0; b < boundaries.length; b++) {
-        if (onset < boundaries[b]) break;
-        idx = b;
-      }
-      return idx;
-    }
-
     // Which tuplet span (by list index) an element belongs to, or -1.
     int spanOf(int index) {
       for (var t = 0; t < tuplets.length; t++) {
@@ -151,69 +125,32 @@ extension _Beaming on _LayoutBuilder {
     }
 
     var onset = Fraction.zero;
-    final runs = <List<int>>[];
     final onsets = <Fraction>[];
-    List<int>? current;
-    int? currentWindow;
-    int? currentSpan;
-
     for (var i = 0; i < elements.length; i++) {
-      final element = elements[i];
       onsets.add(onset);
-      final beamable = element is NoteElement &&
-          _LayoutBuilder._beamCountOf(element.duration.base) >= 1 &&
-          !claimed.contains(i) &&
-          !_crossMeasureIds.contains(element.id);
-      if (beamable) {
-        final window = windowOf(onset);
-        // Beam runs never cross a tuplet boundary in either direction.
-        final tuplet = spanOf(i);
-        if (current != null &&
-            window == currentWindow &&
-            tuplet == currentSpan) {
-          current.add(i);
-        } else {
-          current = [i];
-          currentWindow = window;
-          currentSpan = tuplet;
-          runs.add(current);
-        }
-      } else if (element is RestElement) {
+      onset += effectiveAt(i);
+    }
+
+    final runs = computeBeamRuns(
+      count: elements.length,
+      onsetAt: (i) => onsets[i],
+      roleAt: (i) {
+        final element = elements[i];
         // A rest does not break a beam on its own: if beamable notes continue
         // within the same beat window, the beam passes over the rest (the
         // rest's index is never added, so the beam simply spans the gap). The
         // window/tuplet check when the next note arrives re-attaches it or
         // starts a fresh run, so a rest at a beat boundary still separates.
-      } else {
-        current = null;
-        currentWindow = null;
-        currentSpan = null;
-      }
-      onset += effectiveAt(i);
-    }
-
-    // Merge adjacent all-eighth beat groups within the same half measure
-    // (tuplet groups never merge).
-    if (time != null && time.beatUnit == 4 && time.beats.isEven) {
-      bool allEighths(List<int> run) => run.every((i) =>
-          (elements[i] as NoteElement).duration.base == DurationBase.eighth);
-      for (var i = 0; i < runs.length - 1;) {
-        final a = runs[i];
-        final b = runs[i + 1];
-        if (b.first == a.last + 1 &&
-            spanOf(a.first) == -1 &&
-            spanOf(b.first) == -1 &&
-            allEighths(a) &&
-            allEighths(b) &&
-            _LayoutBuilder._windowIndex(onsets[a.first], halfSpan) ==
-                _LayoutBuilder._windowIndex(onsets[b.first], halfSpan)) {
-          a.addAll(b);
-          runs.removeAt(i + 1);
-        } else {
-          i++;
-        }
-      }
-    }
+        if (element is RestElement) return BeamItemRole.transparent;
+        final beamable = element is NoteElement &&
+            _LayoutBuilder._beamCountOf(element.duration.base) >= 1 &&
+            !claimed.contains(i) &&
+            !_crossMeasureIds.contains(element.id);
+        return beamable ? BeamItemRole.beamable : BeamItemRole.breaker;
+      },
+      spanAt: spanOf,
+      time: _time,
+    );
 
     final groups = <_BeamGroup>[];
     for (final run in runs.where((r) => r.length >= 2)) {
@@ -406,14 +343,15 @@ extension _Beaming on _LayoutBuilder {
 }
 
 // The metric pulse at which secondary (16th+) beams break (Phase 4.7). In a
-// compound (6/8, 9/8, 12/8) or additive (3+2/8) meter the pulse is the base
-// unit, so a run of sixteenths inside a dotted-quarter beat breaks its
-// secondary beams at each eighth. In simple meters it stays the quarter
-// (matching prior behaviour: x/4 groups never exceed a quarter, and cut time
-// still shows the quarter sub-pulse).
+// compound (6/8, 9/8, 12/8), triple (3/8 — beamed whole-measure, so the
+// eighth pulse must show inside it) or additive (3+2/8) meter the pulse is
+// the base unit, so a run of sixteenths breaks its secondary beams at each
+// eighth. In simple meters it stays the quarter (matching prior behaviour:
+// x/4 groups never exceed a quarter, and cut time still shows the quarter
+// sub-pulse).
 Fraction _secondaryBeamPulse(TimeSignature time) {
   final compound = (time.beatUnit == 8 || time.beatUnit == 16) &&
-      time.beats > 3 &&
+      time.beats >= 3 &&
       time.beats % 3 == 0;
   return compound || time.components != null
       ? Fraction(1, time.beatUnit)

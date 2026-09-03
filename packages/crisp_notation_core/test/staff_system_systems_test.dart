@@ -222,4 +222,35 @@ void main() {
     expect(svg, contains('<svg'));
     expect('scale('.allMatches(svg).length, greaterThanOrEqualTo(3));
   });
+
+  test('wrapping preserves staffType: jianpu staves route to the jianpu '
+      'engine on every system', () {
+    final jianpu = StaffSystem([
+      Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        staffType: StaffType.jianpu,
+        notes: 'c4:q d4 e4 f4 | g4 a4 b4 c5 | d5 e5 f5 g5 | a5 b5 c6:h | '
+            'c4:q d4 e4 f4 | g4 a4 b4 c5 | d5 e5 f5 g5 | a5 b5 c6:h',
+      ),
+    ]);
+    final wrapped = layoutStaffSystemSystems(jianpu, settings, maxWidth: 40);
+    expect(wrapped.systems.length, greaterThan(1));
+    for (final sys in wrapped.systems) {
+      final staff = sys.layout.staves.single;
+      // Jianpu renders digits as text and draws no five-line staff; a slice
+      // that lost its staffType would render as standard notation instead.
+      expect(
+        staff.primitives
+            .whereType<TextPrimitive>()
+            .any((t) => RegExp(r'^[1-7]$').hasMatch(t.text)),
+        isTrue,
+      );
+      expect(
+        staff.primitives.whereType<LinePrimitive>().any(
+            (l) => l.from.y == l.to.y && (l.to.x - l.from.x).abs() > 20),
+        isFalse,
+        reason: 'a jianpu system must not draw spanning staff lines',
+      );
+    }
+  });
 }

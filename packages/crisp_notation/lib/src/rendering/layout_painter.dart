@@ -55,13 +55,16 @@ class LayoutPainter {
   /// A laid-out painter for plain text (lyrics, annotations), cached.
   TextPainter textPainter(String text, Color color, double sizeSpaces) {
     final family = theme.textFontFamily;
-    final key = 'txt|$text|${color.toARGB32()}|$sizeSpaces|$family';
+    final fallback = theme.textFontFamilyFallback;
+    final key =
+        'txt|$text|${color.toARGB32()}|$sizeSpaces|$family|${fallback?.join(",")}';
     return _glyphCache.putIfAbsent(key, () {
       return TextPainter(
         text: TextSpan(
           text: text,
           style: TextStyle(
             fontFamily: family,
+            fontFamilyFallback: fallback,
             fontSize: sizeSpaces * scale,
             color: color,
           ),

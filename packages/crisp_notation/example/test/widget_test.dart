@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:crisp_notation/crisp_notation.dart';
 import 'package:crisp_notation_example/gallery.dart';
 import 'package:crisp_notation_example/interactive.dart';
+import 'package:crisp_notation_example/jianpu_iso_gallery.dart';
 import 'package:crisp_notation_example/main.dart';
 
 /// Widget-level smoke tests of the example app (the deeper end-to-end run
@@ -161,5 +162,44 @@ void main() {
     await tester.tap(find.text('Clear'));
     await tester.pumpAndSettle();
     expect(staff.scoreLayout!.regions, isEmpty);
+  });
+
+  testWidgets('ISO jianpu gallery parses and lays out every example',
+      (tester) async {
+    await tester.pumpWidget(const CrispNotationExampleApp());
+    await tester.pumpAndSettle();
+
+    // Building the page initializes the chapter corpus, which parses every
+    // example's Score.simple DSL up front.
+    await tester.tap(find.text('简谱规范'));
+    await tester.pumpAndSettle();
+    expect(find.byType(JianpuIsoGalleryPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // Expand the two collapsed chapters so every card lays out its score.
+    final listScrollable = find.byType(Scrollable).first;
+    for (final chapter in ['第 5 章', '第 7 章']) {
+      await tester.scrollUntilVisible(
+        find.textContaining(chapter),
+        200,
+        scrollable: listScrollable,
+      );
+      // scrollUntilVisible stops at the first visible pixel, which can leave
+      // the tile under the bottom NavigationBar; align it to the viewport
+      // top before tapping.
+      await tester.ensureVisible(find.textContaining(chapter));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining(chapter));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+
+    // Scroll to the last example of the last chapter.
+    await tester.scrollUntilVisible(
+      find.text('换气符号（两音符之间的上方）'),
+      400,
+      scrollable: listScrollable,
+    );
+    expect(tester.takeException(), isNull);
   });
 }

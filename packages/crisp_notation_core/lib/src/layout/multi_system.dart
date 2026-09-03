@@ -507,8 +507,19 @@ StaffSystemSystems layoutStaffSystemSystems(
       throw ArgumentError('all parts must have the same measure count');
     }
   }
-  const engine = LayoutEngine();
-  final naturals = [for (final p in parts) engine.layout(p, settings)];
+  // Natural widths decide the line breaks, so each part must be measured by
+  // its own engine (layoutStaff routes jianpu/tab); a single shared engine
+  // would mismeasure jianpu measures and pack systems against wrong widths.
+  final naturals = [
+    for (final p in parts)
+      layoutStaff(p, settings,
+          leadingWidth: null,
+          measureWidths: null,
+          forcedColumns: null,
+          spacingStretch: 1.0,
+          drawTimeSignature: true,
+          finalBarline: true)
+  ];
   double measureWidth(ScoreLayout l, int i) =>
       l.measureRegions[i].endX - l.measureRegions[i].startX;
   final combined = [
@@ -738,6 +749,7 @@ Score _slice(
   final sliceEnd = sliceIndices.isEmpty ? null : sliceIndices.reduce(max);
   return Score(
     clef: clefAt[first],
+    staffType: score.staffType,
     keySignature: keyAt[first],
     // The time signature shows on the first system and where it changes.
     // Kept even when not drawn — beaming windows derive from it.

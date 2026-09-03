@@ -39,8 +39,10 @@ void main() {
 
   group('atConcertPitch', () {
     test('a B♭ part sounds a major second lower, key and all', () {
-      // Written in D major (a B♭ trumpet part); concert is C major.
-      final part = written('c5:q d5 e5 f5',
+      // Written in D major (a B♭ trumpet part); concert is C major. The
+      // C and F naturals deviate from D major, so they are written with
+      // explicit naturals.
+      final part = written('cn5:q d5 e5 fn5',
           key: const KeySignature(2), transposition: Transposition.bFlat);
       final concert = part.atConcertPitch();
       expect(concert.transposition, isNull);

@@ -1,0 +1,17 @@
+---score
+title: 简谱符号渲染测试用例
+description:
+authors: 系统
+tempo: 120
+timeSignature: 4/4
+tracks:
+  - name: 简谱
+    type: jianpu
+---
+:简谱
+notes: r:q r r e4:e g4 | a4:q. r:e c5:e b4 a4 g4( | g4:e) a4:s g4 e4:q. r:e e4 g4 | a4:q. r:e g4 a4 c5 d5 | e5:w
+lyrics: 如 果 说 这 是 我 们 的 秘 密 那 么 我 不 会 保 护 它
+lyrics2: 如 果 说 这 是 我 们 的 秘 密 那 么 我 不 会 忘 记 它
+notes: r:q r r e4:e g4 | a4:q. r:e c5:e b4 a4 g4( | g4:e) a4:s g4 e4:q. r:e e4 g4 | a4:q. r:e g4 a4 c5 d5 | e5:w
+lyrics: 如 果 说 这 是 我 们 的 秘 密 那 么 我 不 会 原 谅 它
+lyrics2: 如 果 说 这 是 我 们 的 秘 密 那 么 我 不 会 失 去 它

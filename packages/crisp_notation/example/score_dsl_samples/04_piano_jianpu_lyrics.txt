@@ -1,0 +1,26 @@
+---score
+title: 我的祖国
+authors: 集体
+scale: G
+timeSignature: 4/4
+tempo: 110
+tracks:
+  - name: 独唱
+    type: jianpu
+  - name: right
+    type: standard
+    clef: treble
+    group: piano
+  - name: left
+    type: standard
+    clef: bass
+    group: piano
+---
+:独唱
+notes: e4:q e4 f4 g4 | g4:q f4 e4 d4 | c4:q c4 d4 e4 | d4:q. c4:e c4:h
+lyrics: 一 条 大 河 波 浪 宽 风 吹 稻 花 香 两 岸
+lyrics2: 我 家 就 在 岸 上 住 听 惯 了 艄 公 的 号 子
+:right
+notes: c4+e4+g4:q c4+e4+g4:q c4+e4+g4:q c4+e4+g4:q | c4+e4+g4:q c4+e4+g4:q c4+e4+g4:q c4+e4+g4:q | g4+b4+d5:q g4+b4+d5:q g4+b4+d5:q g4+b4+d5:q | g4+b4+d5:q g4+b4+d5:q g4+b4+d5:q g4+b4+d5:q
+:left
+notes: c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q | c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q | g2+d3+g3:q g2+d3+g3:q g2+d3+g3:q g2+d3+g3:q | c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q

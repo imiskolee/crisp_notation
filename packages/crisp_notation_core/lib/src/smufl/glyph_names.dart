@@ -99,6 +99,9 @@ abstract final class SmuflGlyph {
   /// Jazz smear — a smeared slide into the note ([JazzArticulation.smear]).
   static const String brassSmear = 'brassSmear';
 
+  /// Wide vibrato wiggle segment (jianpu 揉弦, [TechniqueMark.vibrato]).
+  static const String wiggleVibratoWide = 'wiggleVibratoWide';
+
   /// Jazz bend — the note bends up and back ([JazzArticulation.bend]).
   static const String brassBend = 'brassBend';
 

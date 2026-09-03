@@ -59,8 +59,8 @@ void main() {
   group('layout', () {
     test('a 1->4 feather forces one group: primary + three fan beams', () {
       final layout = layoutOf(feathered(const [FeatheredBeam('e0', 'e7')]));
-      // Eight eighths would normally beam as (at least) two beat groups of
-      // one beam each; the feather collapses them to one group of four beams.
+      // Eight eighths would normally beam as four beat groups of one beam
+      // each; the feather collapses them to one group of four beams.
       expect(beamsOf(layout), hasLength(4));
     });
 
@@ -89,8 +89,8 @@ void main() {
 
     test('without a feather the same notes beam normally', () {
       final normal = beamsOf(layoutOf(feathered(const [])));
-      // Two beat groups of eighths → two single primary beams, no fan.
-      expect(normal.length, lessThan(4));
+      // Four beat groups of eighths → four single primary beams, no fan.
+      expect(normal, hasLength(4));
     });
 
     test('layout with a feather is deterministic', () {

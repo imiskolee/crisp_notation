@@ -38,7 +38,9 @@ ScoreLayout layoutStaff(
       measureWidths: measureWidths,
       forcedColumns: forcedColumns,
       spacingStretch: spacingStretch,
-      drawTimeSignature: drawTimeSignature,
+      // 简谱不画行首的 "1=X 4/4"：调号标签本就不传（默认 false），拍号在
+      // 这里也压掉。曲中变调/变拍由引擎无条件标出，不受此影响。
+      drawTimeSignature: false,
       finalBarline: finalBarline,
     );
   }
@@ -73,13 +75,23 @@ List<Map<Fraction, double>> alignedColumns(
   double spacingStretch = 1.0,
 }) {
   if (staves.isEmpty) return const [];
-  const engine = LayoutEngine();
   // Natural per-staff layouts give each element's ink split into the part left
-  // of its notehead (accidental) and right of it (notehead/stem/dots), so the
-  // column x can be the notehead position (accidental-aware).
-  final ink = [
-    for (final score in staves) _inkMetrics(engine.layout(score, settings))
+  // of its anchor (accidental) and right of it (notehead/stem/dots — or, for
+  // jianpu, the digit's 增时线/附点 train), so the column x can be the anchor
+  // position (accidental-aware). Each staff routes to its own engine: the
+  // staff engine's ink knows nothing of jianpu dashes, which would otherwise
+  // overflow the next column (dash drawn through the next digit).
+  final natural = [
+    for (final score in staves)
+      layoutStaff(score, settings,
+          leadingWidth: null,
+          measureWidths: null,
+          forcedColumns: null,
+          spacingStretch: spacingStretch,
+          drawTimeSignature: true,
+          finalBarline: true)
   ];
+  final ink = [for (final layout in natural) _inkMetrics(layout)];
 
   final measureCount = staves.first.measures.length;
   final result = <Map<Fraction, double>>[];
@@ -89,6 +101,12 @@ List<Map<Fraction, double>> alignedColumns(
     // matching the engine's multi-voice onset arithmetic).
     final leftAt = <Fraction, double>{};
     final rightAt = <Fraction, double>{};
+    // A jianpu element's advance is NOT ink-derived — it runs digit-centre to
+    // next digit-centre and covers dash trains (增时线格位) and lyric reserves
+    // the ink floor cannot see. Without this floor the forced pass overruns
+    // the shared column (worst at the closing barline, where the next
+    // column's left ink is 0) and the staff's barlines drift off the system.
+    final advanceAt = <Fraction, double>{};
     var measureEnd = Fraction.zero;
     for (var si = 0; si < staves.length; si++) {
       final measure = staves[si].measures[m];
@@ -97,7 +115,9 @@ List<Map<Fraction, double>> alignedColumns(
         var onset = Fraction.zero;
         for (var i = 0; i < voices[v].length; i++) {
           final id = voices[v][i].id;
-          final (l, r) = (id == null ? null : ink[si][id]) ?? (0.0, 1.0);
+          final metric = id == null ? null : ink[si][id];
+          final l = metric?.left ?? 0.0;
+          final r = metric?.right ?? 1.0;
           leftAt[onset] = max(leftAt[onset] ?? 0.0, l);
           rightAt[onset] = max(rightAt[onset] ?? 0.0, r);
           onset += v == 0
@@ -105,6 +125,9 @@ List<Map<Fraction, double>> alignedColumns(
               : voices[v][i].duration.toFraction();
         }
         if (onset > measureEnd) measureEnd = onset;
+      }
+      if (staves[si].staffType == StaffType.jianpu) {
+        _jianpuAdvanceFloors(staves[si], natural[si], m, ink[si], advanceAt);
       }
     }
 
@@ -119,12 +142,13 @@ List<Map<Fraction, double>> alignedColumns(
       final ideal =
           _idealAdvanceFor(next - onsets[k], settings, spacingStretch);
       // Never let this column's right ink collide with the next column's left
-      // ink (its accidental).
+      // ink (its accidental), and never let an engine's own advance overrun
+      // the next column (jianpu dashes/lyrics at the measure end).
       final nextLeft =
           k + 1 < onsets.length ? (leftAt[onsets[k + 1]] ?? 0.0) : 0.0;
       final collision =
           (rightAt[onsets[k]] ?? 0.0) + nextLeft + settings.minNoteGap;
-      x += max(ideal, collision);
+      x += max(ideal, max(collision, advanceAt[onsets[k]] ?? 0.0));
     }
     columns[measureEnd] = x; // the closing-barline column
     result.add(columns);
@@ -132,23 +156,79 @@ List<Map<Fraction, double>> alignedColumns(
   return result;
 }
 
-/// Per-element ink split `(left, right)` about its notehead x, from a natural
-/// [layout]: left = accidental (notehead x − ink left), right = notehead/stem/
-/// dots (ink right − notehead x). Rests (no notehead) anchor at their ink left.
-Map<String, (double, double)> _inkMetrics(ScoreLayout layout) {
-  final headX = <String, double>{};
-  for (final primitive in layout.primitives) {
-    if (primitive is GlyphPrimitive &&
-        primitive.elementId != null &&
-        primitive.smuflName.startsWith('notehead')) {
-      headX.putIfAbsent(primitive.elementId!, () => primitive.position.x);
+/// Per-onset natural-advance floors for one jianpu staff's measure, read from
+/// its natural [layout]: each element's advance is the delta to the next
+/// element's anchor (digit centre → next digit centre); the last element's
+/// floor reaches the natural barline x. Results merge into [advanceAt].
+void _jianpuAdvanceFloors(
+  Score staff,
+  ScoreLayout layout,
+  int measureIndex,
+  Map<String, ({double anchor, double left, double right})> ink,
+  Map<Fraction, double> advanceAt,
+) {
+  final measure = staff.measures[measureIndex];
+  final elements = measure.elements;
+  if (elements.isEmpty) return;
+  if (measureIndex >= layout.measureRegions.length) return;
+  final onsets = <Fraction>[];
+  final anchors = <double?>[];
+  var onset = Fraction.zero;
+  for (var i = 0; i < elements.length; i++) {
+    onsets.add(onset);
+    final id = elements[i].id;
+    anchors.add(id == null ? null : ink[id]?.anchor);
+    onset += measure.effectiveDurationAt(i);
+  }
+  for (var i = 0; i < elements.length; i++) {
+    final a = anchors[i];
+    if (a == null) continue;
+    final double advance;
+    if (i + 1 < elements.length) {
+      final next = anchors[i + 1];
+      if (next == null) continue;
+      advance = next - a;
+    } else {
+      advance = layout.measureRegions[measureIndex].endX - a;
+    }
+    if (advance > (advanceAt[onsets[i]] ?? 0.0)) {
+      advanceAt[onsets[i]] = advance;
     }
   }
-  final out = <String, (double, double)>{};
+}
+
+/// Per-element ink split about its anchor x, from a natural [layout]:
+/// `left` = accidental (anchor x − ink left), `right` = notehead/stem/dots
+/// (ink right − anchor x). The anchor is the notehead for staff notation;
+/// jianpu elements have no notehead glyph, so their anchor is the digit (or
+/// first "0" of a long rest) text centre — the jianpu notehead analogue that
+/// aligns with a staff notehead at the same onset. Elements with neither
+/// anchor at their ink left.
+Map<String, ({double anchor, double left, double right})> _inkMetrics(
+    ScoreLayout layout) {
+  final headX = <String, double>{};
+  final digitX = <String, double>{};
+  for (final primitive in layout.primitives) {
+    final id = primitive.elementId;
+    if (id == null) continue;
+    if (primitive is GlyphPrimitive &&
+        primitive.smuflName.startsWith('notehead')) {
+      headX.putIfAbsent(id, () => primitive.position.x);
+    } else if (primitive is TextPrimitive &&
+        primitive.text.length == 1 &&
+        primitive.text.codeUnitAt(0) >= 0x30 &&
+        primitive.text.codeUnitAt(0) <= 0x37) {
+      // '0'..'7' — a jianpu digit/rest. First unit anchors a long rest.
+      digitX.putIfAbsent(id, () => primitive.position.x);
+    }
+  }
+  final out = <String, ({double anchor, double left, double right})>{};
   for (final region in layout.regions) {
     final b = region.bounds;
-    final anchor = headX[region.elementId] ?? b.left;
-    out[region.elementId] = (anchor - b.left, b.right - anchor);
+    final anchor =
+        headX[region.elementId] ?? digitX[region.elementId] ?? b.left;
+    out[region.elementId] =
+        (anchor: anchor, left: anchor - b.left, right: b.right - anchor);
   }
   return out;
 }

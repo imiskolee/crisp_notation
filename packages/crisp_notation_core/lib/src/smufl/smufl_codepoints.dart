@@ -1,4 +1,4 @@
-/// SMuFL glyph name → codepoint table for the glyphs crisp_notation draws.
+﻿/// SMuFL glyph name → codepoint table for the glyphs crisp_notation draws.
 ///
 /// Codepoints follow the SMuFL specification
 /// (https://w3c.github.io/smufl/latest/) and are identical in every
@@ -137,6 +137,7 @@ const Map<String, String> smuflCodepoints = {
   'fClef8vb': '\uE064',
   'ornamentTrill': '\uE566',
   'wiggleTrill': '\uEAA4',
+  'wiggleVibratoWide': '\uEAB2',
   'ornamentTurn': '\uE567',
   'ornamentTurnInverted': '\uE568',
   'ornamentShortTrill': '\uE56C',

@@ -1,0 +1,20 @@
+---score
+title: 我的祖国（钢琴独奏）
+authors: 集体
+scale: G
+timeSignature: 4/4
+tempo: 110
+tracks:
+  - name: piano_right
+    type: standard
+    clef: treble
+    group: piano
+  - name: piano_left
+    type: standard
+    clef: bass
+    group: piano
+---
+:piano_right
+notes: e4:q e4 f4 g4 | g4:q f4 e4 d4 | c4:q c4 d4 e4 | e4:q. d4:e d4:h
+:piano_left
+notes: c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q | c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q | g2+d3+g3:q g2+d3+g3:q g2+d3+g3:q g2+d3+g3:q | c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q c2+e3+g3:q

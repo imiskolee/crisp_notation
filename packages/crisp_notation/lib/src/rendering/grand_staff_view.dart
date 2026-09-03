@@ -316,13 +316,19 @@ class RenderGrandStaffView extends RenderBox {
     _painter.paintLayout(canvas, lower, layout.lower);
 
     // Barline connectors and brace join the two staves as one instrument
-    // (a piano grand staff). Skip both when either staff is jianpu: a
-    // mixed standard+jianpu system is two independent renderings of the
-    // same melody that share column alignment — jianpu never bridges
-    // across staves (简谱不需要跨 barline 一起渲染).
-    final hasJianpu = _grandStaff.upper.staffType == StaffType.jianpu ||
-        _grandStaff.lower.staffType == StaffType.jianpu;
-    if (hasJianpu) return;
+    // (a piano grand staff). A mixed standard+jianpu system is two
+    // independent renderings of the same melody that share column
+    // alignment — nothing joins it. Two jianpu staves form a 简谱大谱表:
+    // the 花连谱号 joins them; 行首不画连谱线（简谱纵线只收小节末尾），
+    // mid-score barlines never bridge (简谱不需要跨 barline 一起渲染).
+    final upperIsJianpu = _grandStaff.upper.staffType == StaffType.jianpu;
+    final lowerIsJianpu = _grandStaff.lower.staffType == StaffType.jianpu;
+    if (upperIsJianpu || lowerIsJianpu) {
+      if (upperIsJianpu && lowerIsJianpu) {
+        _paintJianpuBrace(canvas, lower, layout);
+      }
+      return;
+    }
 
     // Barline connectors: join every full-staff barline of the upper
     // staff down to the lower staff, plus the systemic start line.
@@ -358,6 +364,28 @@ class RenderGrandStaffView extends RenderBox {
         math.Point(-braceInset + 0.15, 4.0),
         _theme.staffColor,
         glyphScale: glyphScale,
+      );
+    }
+  }
+
+  /// GB/T 46845-2025 §5.3.2: the 花连谱号 (brace) joins two jianpu staves
+  /// as one system, spanning the upper staff's digitTop down to the lower
+  /// staff's digitBaseline. 行首不画连谱线 —— 简谱纵线只收小节末尾，连谱
+  /// 号单独成组。
+  void _paintJianpuBrace(Canvas canvas, Offset lower, GrandStaffLayout layout) {
+    const connTop = JianpuLayoutEngine.digitTop;
+    const connBottom = JianpuLayoutEngine.digitBaseline;
+    final braceBox =
+        MusicFonts.metadataOrNull(_theme.musicFont)?.bBoxOf('brace');
+    if (braceBox != null) {
+      final spanSpaces = (4 - connTop) + layout.staffGap + connBottom;
+      _painter.paintGlyph(
+        canvas,
+        lower,
+        'brace',
+        math.Point(-braceInset + 0.15, connBottom),
+        _theme.staffColor,
+        glyphScale: spanSpaces / braceBox.height,
       );
     }
   }

@@ -89,7 +89,7 @@ void main() {
       // A natural cancelling the key prints a natural sign.
       expect(
           music(scoreToBraille(Score.simple(
-                  notes: 'f4:q', keySignature: const KeySignature(1))))
+                  notes: 'fn4:q', keySignature: const KeySignature(1))))
               .contains(cell([1, 6])),
           isTrue);
     });

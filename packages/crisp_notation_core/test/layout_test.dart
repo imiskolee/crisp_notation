@@ -286,12 +286,14 @@ void main() {
   });
 
   group('rule 7: beaming', () {
-    test('4/4 measure of 8 eighths yields 2 beams', () {
+    test('4/4 measure of 8 eighths beams per beat (4 groups)', () {
       final layout = layoutOf(Score.simple(
         timeSignature: TimeSignature.fourFour,
         notes: 'c5:e d5 e5 f5 g5 a5 b5 c6',
       ));
-      expect(beamsOf(layout), hasLength(2));
+      // One beam group per beat — the shared per-beat grouping (beam_grouping
+      // .dart), identical to the jianpu 减时线 grouping; no half-measure merge.
+      expect(beamsOf(layout), hasLength(4));
       expect(stemsOf(layout), hasLength(8));
     });
 
@@ -396,13 +398,18 @@ void main() {
         timeSignature: TimeSignature.fourFour,
         notes: 'g4:e a4 b4 c5 r:h',
       ));
-      final beam = beamsOf(layout).single;
+      // Per-beat groups: g4+a4 (stems up — both below the middle line) and
+      // b4+c5 (stems down — c5 pulls above).
+      final beams = beamsOf(layout);
+      expect(beams, hasLength(2));
       final stems = stemsOf(layout);
       expect(stems, hasLength(4));
-      for (final stem in stems) {
-        // G4 lies farther below the middle line than C5 above it, so the
-        // whole group stems up.
-        expect(stem.to.y, lessThan(stem.from.y + 1e-9));
+      for (final (i, stem) in stems.indexed) {
+        final up = i < 2;
+        expect(stem.to.y, up ? lessThan(stem.from.y) : greaterThan(stem.from.y));
+        final beam = beams.singleWhere((b) =>
+            stem.from.x >= min(b.start.x, b.end.x) - 1e-9 &&
+            stem.from.x <= max(b.start.x, b.end.x) + 1e-9);
         final t = (stem.from.x - beam.start.x) / (beam.end.x - beam.start.x);
         final beamYAtStem = beam.start.y + t * (beam.end.y - beam.start.y);
         expect(stem.to.y, closeTo(beamYAtStem, 1e-9));

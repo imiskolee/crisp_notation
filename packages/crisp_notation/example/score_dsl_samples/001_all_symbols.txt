@@ -1,0 +1,10 @@
+---score
+title: unknown
+tracks:
+  - name:  简谱
+    type: jianpu
+---
+
+:简谱
+notes: r:w | r:h r:q r:e. c4:s | c4:e c4:e c4:s c4:e c4:s c4:e. c4:s c4:s c4:e. | 3[c4:e c4 c4]  3[c4:e r c4] 3[r:e c4 c4] 5[c4:s c4 c4 c4 c4] | c4:q~ c4:e. c4:s~ c4:e c4:e~ 3[c4:e c4 c4] |
+c4+e4+g4:q( e4+g4+c5:q c4+e4+g4:e) e4+g4+c5:e( c4+e4+g4:s e4+g4+c5:s c4+e4+g4:s e4+g4+c5:s) |  c4:h~ c4:e. c4:s~ c4 | c4:e( d4:e e4:e.) f4:s~ f4:s r:e g4:s~ g4:q | c4:q$ c4:q% c4:q& c4:q?|

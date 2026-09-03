@@ -616,6 +616,9 @@ class RenderStaffSystemView extends RenderBox {
     ];
     for (final group in layout.source.effectiveBarlineGroups) {
       if (group.first == group.last) continue;
+      // 简谱组不画任何跨行纵线：行首不画连谱线（简谱纵线只收小节末尾），
+      // 小节线也不跨行连接。
+      if (_allJianpu(layout.source, group.first, group.last)) continue;
       final topY = origins[group.first].dy;
       final bottomY = origins[group.last].dy + 4 * _scale;
       for (final bar in bars) {
@@ -625,6 +628,14 @@ class RenderStaffSystemView extends RenderBox {
       }
     }
     _paintBracketsForLayout(canvas, origins, layout);
+  }
+
+  /// Whether every staff in [first]..[last] of [system] is jianpu.
+  bool _allJianpu(StaffSystem system, int first, int last) {
+    for (var i = first; i <= last; i++) {
+      if (system.staves[i].staffType != StaffType.jianpu) return false;
+    }
+    return true;
   }
 
   /// How many other brackets strictly contain [b] — its nesting depth. Deeper
@@ -647,24 +658,67 @@ class RenderStaffSystemView extends RenderBox {
         .fold(0, (m, d) => d > m ? d : m);
     for (final group in brackets) {
       final shift = (maxDepth - _depthOf(group, brackets)) * step * _scale;
-      final top = origins[group.first].dy;
-      final bottom = origins[group.last].dy + 4 * _scale;
+      final isJianpuGroup =
+          _allJianpu(layout.source, group.first, group.last);
+      // 简谱行的连谱线纵程是数字墨盒（digitTop…digitBaseline，无谱线），
+      // 连谱号联括该范围；标准谱行联括 y = 0..4。
+      final top = origins[group.first].dy +
+          (isJianpuGroup ? JianpuLayoutEngine.digitTop : 0) * _scale;
+      final bottom = origins[group.last].dy +
+          (isJianpuGroup ? JianpuLayoutEngine.digitBaseline : 4) * _scale;
       final x = origins.first.dx;
+      // 简谱组的连谱号直接画在行首（不再先画跨行连谱线 —— 简谱纵线只收
+      // 小节末尾）。
       if (group.kind == StaffBracketKind.brace) {
         final box =
             MusicFonts.metadataOrNull(_theme.musicFont)?.bBoxOf('brace');
         if (box != null) {
-          final span =
-              layout.staffTop(group.last) + 4 - layout.staffTop(group.first);
+          final span = layout.staffTop(group.last) +
+              (isJianpuGroup ? JianpuLayoutEngine.digitBaseline : 4) -
+              layout.staffTop(group.first) -
+              (isJianpuGroup ? JianpuLayoutEngine.digitTop : 0);
           _painter.paintGlyph(
             canvas,
             Offset(x - shift, origins[group.last].dy),
             'brace',
-            math.Point(-leftInset + 0.35, 4.0),
+            math.Point(-leftInset + 0.35,
+                isJianpuGroup ? JianpuLayoutEngine.digitBaseline : 4.0),
             _theme.staffColor,
             glyphScale: span / box.height,
           );
         }
+      } else if (isJianpuGroup) {
+        // GB/T 46845-2025 §5.3.3 直连谱号: 一条粗纵线，两端各有一斜括
+        // 向连谱线的短半弧括线（用于二人以上同时唱奏的两行以上曲谱）。
+        final bx = x - 0.5 * _scale - shift;
+        canvas.drawLine(
+            Offset(bx, top),
+            Offset(bx, bottom),
+            Paint()
+              ..color = _theme.staffColor
+              ..strokeWidth = 0.4 * _scale);
+        final hookPaint = Paint()
+          ..color = _theme.staffColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.16 * _scale
+          ..strokeCap = StrokeCap.round;
+        final hookReach = 0.65 * _scale;
+        final hookDrop = 0.45 * _scale;
+        canvas.drawPath(
+            Path()
+              ..moveTo(bx, top)
+              ..quadraticBezierTo(bx + hookReach * 0.55, top + hookDrop * 0.1,
+                  bx + hookReach, top + hookDrop),
+            hookPaint);
+        canvas.drawPath(
+            Path()
+              ..moveTo(bx, bottom)
+              ..quadraticBezierTo(
+                  bx + hookReach * 0.55,
+                  bottom - hookDrop * 0.1,
+                  bx + hookReach,
+                  bottom - hookDrop),
+            hookPaint);
       } else {
         final bx = x - 0.5 * _scale - shift;
         final paint = Paint()

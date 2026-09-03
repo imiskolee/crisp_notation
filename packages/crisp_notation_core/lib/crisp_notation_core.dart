@@ -54,6 +54,7 @@ export 'src/omr/bekern.dart';
 export 'src/omr/lilynotes.dart';
 export 'src/omr/omr.dart';
 export 'src/omr/semantic.dart';
+export 'src/score_dsl/score_dsl.dart';
 export 'src/playback/playback_timeline.dart';
 export 'src/playback/tempo_map.dart';
 export 'src/smufl/glyph_names.dart';

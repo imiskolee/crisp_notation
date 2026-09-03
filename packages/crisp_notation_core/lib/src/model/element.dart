@@ -94,6 +94,41 @@ enum Ornament {
       };
 }
 
+/// Chinese-instrument technique marks (民乐技法记号) drawn above a jianpu
+/// digit — 简谱 v0.6.3. They live apart from [Ornament] (western ornaments
+/// with SMuFL glyphs and cross-notation semantics): these marks follow the
+/// 简谱 conventions of GB/T 46845-2025 §7.6/§7.11 and published 笛/胡琴谱,
+/// and are rendered by the jianpu engine only (the staff engine ignores the
+/// field; nothing breaks on other staff types).
+enum TechniqueMark {
+  /// 上滑音 — slide up into the note (↗, SMuFL brassScoop).
+  slideUp,
+
+  /// 下滑音 — slide down off/into the note (↘, SMuFL brassFallLipShort).
+  slideDown,
+
+  /// 回滑音（回滚音）— slide away and return; scoop + fall side by side.
+  slideReturn,
+
+  /// 揉弦 — vibrato, a wavy line (SMuFL wiggleVibratoWide).
+  vibrato,
+
+  /// 拨弦 — pizzicato; text 拨 above the note (GB §7.11: 中文宋体).
+  pizzicato,
+
+  /// 花舌 — flutter tongue; the conventional ✳/※ mark.
+  flutterTongue,
+
+  /// 厉音 — dizi hard-tongued attack; the conventional ⊥ mark.
+  sharpTongue,
+
+  /// 换气 — breath mark; the conventional ∨ shape (also between notes).
+  breath,
+
+  /// 吐音 — tonguing; the conventional letter T.
+  tonguing,
+}
+
 /// A single rhythmic event in a measure: a note/chord or a rest.
 ///
 /// Elements are value types; treat their lists as immutable. The optional
@@ -185,6 +220,11 @@ class NoteElement extends MusicElement {
   /// Ornament drawn above the element (above a fermata when both exist).
   final Ornament? ornament;
 
+  /// 民乐技法记号 stacked above the note in jianpu, in enum order from the
+  /// digit outward (after articulations and the ornament). Ignored by the
+  /// staff engine.
+  final Set<TechniqueMark> techniques;
+
   /// Fingering marks stacked above the note, in list order from the notehead
   /// upward: digits 0–9, or [kFingeringThumb] for a string player's `T`.
   /// Usually one per pitch of a chord, but the length is not tied to
@@ -221,6 +261,7 @@ class NoteElement extends MusicElement {
     this.graceNotes = const [],
     this.graceStyle = GraceStyle.acciaccatura,
     this.ornament,
+    this.techniques = const {},
     this.fingerings = const [],
     this.arpeggio,
     this.tremolo,
@@ -239,6 +280,7 @@ class NoteElement extends MusicElement {
     List<Pitch> graceNotes = const [],
     GraceStyle graceStyle = GraceStyle.acciaccatura,
     Ornament? ornament,
+    Set<TechniqueMark> techniques = const {},
     List<int> fingerings = const [],
     Arpeggio? arpeggio,
     int? tremolo,
@@ -254,6 +296,7 @@ class NoteElement extends MusicElement {
           graceNotes: graceNotes,
           graceStyle: graceStyle,
           ornament: ornament,
+          techniques: techniques,
           fingerings: fingerings,
           arpeggio: arpeggio,
           tremolo: tremolo,
@@ -277,6 +320,7 @@ class NoteElement extends MusicElement {
     List<Pitch>? graceNotes,
     GraceStyle? graceStyle,
     Ornament? ornament,
+    Set<TechniqueMark>? techniques,
     List<int>? fingerings,
     Arpeggio? arpeggio,
     int? tremolo,
@@ -293,6 +337,7 @@ class NoteElement extends MusicElement {
         graceNotes: graceNotes ?? this.graceNotes,
         graceStyle: graceStyle ?? this.graceStyle,
         ornament: ornament ?? this.ornament,
+        techniques: techniques ?? this.techniques,
         fingerings: fingerings ?? this.fingerings,
         arpeggio: arpeggio ?? this.arpeggio,
         tremolo: tremolo ?? this.tremolo,
@@ -316,6 +361,7 @@ class NoteElement extends MusicElement {
       other.graceStyle == graceStyle &&
       listEquals(other.pitches, pitches) &&
       setEquals(other.articulations, articulations) &&
+      setEquals(other.techniques, techniques) &&
       listEquals(other.graceNotes, graceNotes) &&
       listEquals(other.fingerings, fingerings);
 
@@ -333,6 +379,7 @@ class NoteElement extends MusicElement {
         velocity,
         Object.hashAll(pitches),
         Object.hashAllUnordered(articulations),
+        Object.hashAllUnordered(techniques),
         Object.hashAll(graceNotes),
         Object.hashAll(fingerings),
       );

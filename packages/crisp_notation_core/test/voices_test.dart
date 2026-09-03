@@ -172,10 +172,11 @@ void main() {
         notes: 'c5:e d5 e5 f5 ; c4:e d4 e4 f4',
       ));
       final beams = layout.primitives.whereType<BeamPrimitive>().toList();
-      expect(beams, hasLength(2));
-      // Voice-1 beam above its noteheads (stems up), voice-2 beam below.
-      expect(beams[0].start.y, lessThan(0.5));
-      expect(beams[1].start.y, greaterThan(4.0));
+      // Per-beat groups: two beams per voice.
+      expect(beams, hasLength(4));
+      // Voice-1 beams above their noteheads (stems up), voice-2 beams below.
+      expect(beams.where((b) => b.start.y < 0.5), hasLength(2));
+      expect(beams.where((b) => b.start.y > 4.0), hasLength(2));
     });
 
     test('ties bind within a voice, not across voices', () {

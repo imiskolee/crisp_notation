@@ -36,6 +36,12 @@ class CrispNotationTheme {
   /// renders as glyphs instead of the test framework's box font.
   final String? textFontFamily;
 
+  /// Fallback families for plain text, consulted when [textFontFamily]
+  /// lacks a glyph — e.g. CJK lyrics under a Latin text font. Null lets
+  /// the platform resolve fallbacks (fine in an app; headless PNG export
+  /// should set this explicitly).
+  final List<String>? textFontFamilyFallback;
+
   /// The SMuFL music font used to draw notation glyphs (default: Bravura).
   /// Switching it swaps the whole engraving face — see [MusicFont].
   final MusicFont musicFont;
@@ -50,6 +56,7 @@ class CrispNotationTheme {
     this.hitSlop = 0.5,
     this.lineBoost = 1.0,
     this.textFontFamily,
+    this.textFontFamilyFallback,
     this.musicFont = MusicFont.bravura,
   });
 
@@ -74,6 +81,7 @@ class CrispNotationTheme {
     double? hitSlop,
     double? lineBoost,
     String? textFontFamily,
+    List<String>? textFontFamilyFallback,
     MusicFont? musicFont,
   }) =>
       CrispNotationTheme(
@@ -85,6 +93,8 @@ class CrispNotationTheme {
         hitSlop: hitSlop ?? this.hitSlop,
         lineBoost: lineBoost ?? this.lineBoost,
         textFontFamily: textFontFamily ?? this.textFontFamily,
+        textFontFamilyFallback:
+            textFontFamilyFallback ?? this.textFontFamilyFallback,
         musicFont: musicFont ?? this.musicFont,
       );
 
@@ -98,6 +108,7 @@ class CrispNotationTheme {
       other.hitSlop == hitSlop &&
       other.lineBoost == lineBoost &&
       other.textFontFamily == textFontFamily &&
+      listEquals(other.textFontFamilyFallback, textFontFamilyFallback) &&
       other.musicFont == musicFont &&
       mapEquals(other.elementColors, elementColors);
 
@@ -110,6 +121,9 @@ class CrispNotationTheme {
         hitSlop,
         lineBoost,
         textFontFamily,
+        textFontFamilyFallback == null
+            ? null
+            : Object.hashAll(textFontFamilyFallback!),
         musicFont,
         Object.hashAllUnordered(
           elementColors.entries.map((e) => Object.hash(e.key, e.value)),

@@ -282,9 +282,12 @@ stemless breve) · stems (down iff the notehead farthest from the middle
 line is at position ≥ 4; chords by the farther extreme, ties down;
 default length 3.5 spaces, extended to the middle line for far ledger
 notes and by 0.75/level for 3rd/4th beam-or-flag levels) · flags for
-unbeamed eighths…sixty-fourths · beat-based beaming (windows of
-`1/beatUnit`; adjacent all-eighth groups merge per half measure in even
-x/4 meters — 8 eighths in 4/4 = 2 beams; never across rests or windows;
+unbeamed eighths…sixty-fourths · beat-based beaming (the shared
+`computeBeamRuns` in `beam_grouping.dart`, identical to the jianpu 减时线
+grouping: one group per metric window from `beamGroupBoundaries` — per beat
+in simple meters, per component in compound/additive meters, whole-measure
+in 3/8-type meters, quarter windows when unmetered; no half-measure merge,
+never across rests or windows;
 slant clamped to ±1 space; every beamed stem keeps ≥ default length; the
 beam never crosses the middle line from the stem side; secondary/tertiary/quaternary
 beams per duration level and 1-space beamlets) · ledger lines with
