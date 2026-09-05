@@ -406,7 +406,8 @@ void main() {
       expect(stems, hasLength(4));
       for (final (i, stem) in stems.indexed) {
         final up = i < 2;
-        expect(stem.to.y, up ? lessThan(stem.from.y) : greaterThan(stem.from.y));
+        expect(
+            stem.to.y, up ? lessThan(stem.from.y) : greaterThan(stem.from.y));
         final beam = beams.singleWhere((b) =>
             stem.from.x >= min(b.start.x, b.end.x) - 1e-9 &&
             stem.from.x <= max(b.start.x, b.end.x) + 1e-9);

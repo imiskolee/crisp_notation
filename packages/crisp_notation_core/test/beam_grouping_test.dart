@@ -61,23 +61,20 @@ void main() {
     });
 
     test('2/4: four eighths group per beat', () {
-      expect(
-          runs(eighthOnsets(4), time: TimeSignature.twoFour), [
+      expect(runs(eighthOnsets(4), time: TimeSignature.twoFour), [
         [0, 1],
         [2, 3]
       ]);
     });
 
     test('3/8: three eighths form one whole-measure run', () {
-      expect(
-          runs(eighthOnsets(3), time: const TimeSignature(3, 8)), [
+      expect(runs(eighthOnsets(3), time: const TimeSignature(3, 8)), [
         [0, 1, 2]
       ]);
     });
 
     test('6/8: six eighths group in threes', () {
-      expect(
-          runs(eighthOnsets(6), time: TimeSignature.sixEight), [
+      expect(runs(eighthOnsets(6), time: TimeSignature.sixEight), [
         [0, 1, 2],
         [3, 4, 5]
       ]);

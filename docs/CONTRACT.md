@@ -194,7 +194,9 @@ duration := ('b'|'w'|'h'|'q'|'e'|'s'|'t'|'x') ('.' | '..')?
             s sixteenth, t thirty-second, x sixty-fourth
 tie      := '~' at the end of a chord token (c4:q~)
 slur     := '(' opens / ')' closes, at the end of a chord token
-            (c4:q( d4 e4)) — may cross barlines, no nesting
+            (c4:q( d4 e4)) — may cross barlines and nest; each ')'
+            pairs with the most recent unmatched '(' (LIFO), so
+            c4:q(( e4) g4) yields two slurs from c4
 tuplet   := 'actual[' or 'actual:normal[' opens, ']' closes
             (3[c4:e d4 e4]) — within one measure, no nesting; default
             normal = largest power of two below actual (3 for duplets)

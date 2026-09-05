@@ -59,11 +59,23 @@ void main() {
     test('malformed slurs are rejected', () {
       expect(() => Score.simple(notes: 'c4:q( d4'), throwsFormatException);
       expect(() => Score.simple(notes: 'c4:q) d4'), throwsFormatException);
-      expect(
-        () => Score.simple(notes: 'c4:q( d4( e4) f4)'),
-        throwsFormatException,
-      );
+      expect(() => Score.simple(notes: 'c4:q(( d4)'), throwsFormatException);
       expect(() => Score.simple(notes: 'r:q( c4)'), throwsFormatException);
+    });
+
+    test('nested slurs pair inside-out (LIFO)', () {
+      final score = Score.simple(notes: 'c4:q(( e4) g4)');
+      expect(score.slurs, [const Slur('e0', 'e1'), const Slur('e0', 'e2')]);
+    });
+
+    test('properly nested slurs from different opens', () {
+      final score = Score.simple(notes: 'c4:q( d4( e4) f4)');
+      expect(score.slurs, [const Slur('e1', 'e2'), const Slur('e0', 'e3')]);
+    });
+
+    test('nested slurs cross barlines', () {
+      final score = Score.simple(notes: 'c4:q(( d4 | e4) f4)');
+      expect(score.slurs, [const Slur('e0', 'e2'), const Slur('e0', 'e3')]);
     });
 
     test('slurs participate in Score equality', () {

@@ -223,7 +223,8 @@ void main() {
     expect('scale('.allMatches(svg).length, greaterThanOrEqualTo(3));
   });
 
-  test('wrapping preserves staffType: jianpu staves route to the jianpu '
+  test(
+      'wrapping preserves staffType: jianpu staves route to the jianpu '
       'engine on every system', () {
     final jianpu = StaffSystem([
       Score.simple(
@@ -246,8 +247,9 @@ void main() {
         isTrue,
       );
       expect(
-        staff.primitives.whereType<LinePrimitive>().any(
-            (l) => l.from.y == l.to.y && (l.to.x - l.from.x).abs() > 20),
+        staff.primitives
+            .whereType<LinePrimitive>()
+            .any((l) => l.from.y == l.to.y && (l.to.x - l.from.x).abs() > 20),
         isFalse,
         reason: 'a jianpu system must not draw spanning staff lines',
       );

@@ -181,13 +181,15 @@ Set<String> idsAtTick(List<PlaybackTickNote> timeline, int tick) => {
 /// Converts PPQ [ticks] to seconds at [quarterBpm]. The inverse of
 /// [secondsToTicks]. Use at the audio-engine boundary to map a tick-based
 /// timeline to wall-clock time.
-double ticksToSeconds(int ticks, {required double quarterBpm, int ticksPerQuarter = 480}) =>
+double ticksToSeconds(int ticks,
+        {required double quarterBpm, int ticksPerQuarter = 480}) =>
     ticks / (ticksPerQuarter * quarterBpm / 60);
 
 /// Converts seconds to PPQ ticks at [quarterBpm]. The inverse of
 /// [ticksToSeconds]. Use to map an audio clock's position into the tick
 /// domain for [idsAtTick] lookups.
-int secondsToTicks(double seconds, {required double quarterBpm, int ticksPerQuarter = 480}) =>
+int secondsToTicks(double seconds,
+        {required double quarterBpm, int ticksPerQuarter = 480}) =>
     (seconds * ticksPerQuarter * quarterBpm / 60).round();
 
 /// The sounding MIDI pitch numbers of the note elements in [ids] — for driving

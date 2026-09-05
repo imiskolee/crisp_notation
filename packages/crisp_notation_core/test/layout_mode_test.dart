@@ -57,7 +57,9 @@ void main() {
       expect(result.systems.single.lastMeasure, n - 1);
     });
 
-    test('maxWidth on returned StaffSystemSystems equals the natural layout width', () {
+    test(
+        'maxWidth on returned StaffSystemSystems equals the natural layout width',
+        () {
       final doc = StaffSystem([eightMeasures()]);
       final result = layoutStaffSystemSystems(
         doc,
@@ -69,7 +71,8 @@ void main() {
       expect(result.maxWidth, greaterThan(1));
     });
 
-    test('ignores maxWidth: even absurdly small maxWidth produces no wrapping', () {
+    test('ignores maxWidth: even absurdly small maxWidth produces no wrapping',
+        () {
       final doc = StaffSystem([eightMeasures()]);
       final wide = layoutStaffSystemSystems(
         doc,
@@ -84,7 +87,8 @@ void main() {
         layoutMode: SystemLayoutMode.singleLine,
       );
       expect(narrow.systems, hasLength(1));
-      expect(narrow.systems.single.layout.width, wide.systems.single.layout.width);
+      expect(
+          narrow.systems.single.layout.width, wide.systems.single.layout.width);
       expect(
         narrow.systems.single.layout.staves.first.primitives.length,
         wide.systems.single.layout.staves.first.primitives.length,
@@ -106,7 +110,8 @@ void main() {
   });
 
   group('SystemLayoutMode.singleSystem', () {
-    test('returns one system covering every measure, same output as singleLine', () {
+    test('returns one system covering every measure, same output as singleLine',
+        () {
       final doc = StaffSystem([eightMeasures()]);
       final n = doc.staves.first.measures.length;
       final result = layoutStaffSystemSystems(
@@ -148,7 +153,10 @@ void main() {
       // Must have 2+ staves so staffGap actually contributes to height.
       final doc = StaffSystem([
         Score.simple(timeSignature: TimeSignature.fourFour, notes: 'c4:w'),
-        Score.simple(timeSignature: TimeSignature.fourFour, clef: Clef.bass, notes: 'c3:w'),
+        Score.simple(
+            timeSignature: TimeSignature.fourFour,
+            clef: Clef.bass,
+            notes: 'c3:w'),
       ]);
       final spaced = layoutStaffSystemSingleLine(doc, settings, staffGap: 20);
       final tight = layoutStaffSystemSingleLine(doc, settings, staffGap: 2);
@@ -161,7 +169,8 @@ void main() {
     test('omitting layoutMode behaves identically to wrapped', () {
       final doc = StaffSystem([eightMeasures()]);
       const maxWidth = 30.0;
-      final defaults = layoutStaffSystemSystems(doc, settings, maxWidth: maxWidth);
+      final defaults =
+          layoutStaffSystemSystems(doc, settings, maxWidth: maxWidth);
       final explicit = layoutStaffSystemSystems(
         doc,
         settings,
@@ -170,13 +179,18 @@ void main() {
       );
       expect(defaults.systems.length, explicit.systems.length);
       for (var i = 0; i < defaults.systems.length; i++) {
-        expect(defaults.systems[i].firstMeasure, explicit.systems[i].firstMeasure);
-        expect(defaults.systems[i].lastMeasure, explicit.systems[i].lastMeasure);
-        expect(defaults.systems[i].layout.width, explicit.systems[i].layout.width);
+        expect(
+            defaults.systems[i].firstMeasure, explicit.systems[i].firstMeasure);
+        expect(
+            defaults.systems[i].lastMeasure, explicit.systems[i].lastMeasure);
+        expect(
+            defaults.systems[i].layout.width, explicit.systems[i].layout.width);
       }
     });
 
-    test('wrapped mode respects positive maxWidth and breaks into multiple systems', () {
+    test(
+        'wrapped mode respects positive maxWidth and breaks into multiple systems',
+        () {
       final doc = StaffSystem([eightMeasures()]);
       const narrow = 25.0;
       final broken = layoutStaffSystemSystems(

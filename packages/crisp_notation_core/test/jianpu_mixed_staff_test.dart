@@ -53,9 +53,8 @@ List<double> noteheadXs(ScoreLayout layout) {
 
 void main() {
   setUpAll(() {
-    final source =
-        File('../crisp_notation/assets/smufl/bravura_metadata.json')
-            .readAsStringSync();
+    final source = File('../crisp_notation/assets/smufl/bravura_metadata.json')
+        .readAsStringSync();
     metadata =
         SmuflMetadata.fromJson(jsonDecode(source) as Map<String, Object?>);
     settings = LayoutSettings(metadata: metadata);
@@ -85,8 +84,7 @@ void main() {
       final lowerBarXs = layout.lower.measureRegions.map((r) => r.endX);
       expect(lowerBarXs.length, upperBarXs.length);
       for (var i = 0; i < upperBarXs.length; i++) {
-        expect(lowerBarXs.elementAt(i),
-            closeTo(upperBarXs.elementAt(i), 0.01),
+        expect(lowerBarXs.elementAt(i), closeTo(upperBarXs.elementAt(i), 0.01),
             reason: 'barline $i x mismatch');
       }
     });

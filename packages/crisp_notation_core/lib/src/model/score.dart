@@ -269,7 +269,9 @@ class Score {
   /// - A trailing `~` ties the note/chord to the next note element
   ///   (`c4:q~ c4:q`), also across a barline.
   /// - A trailing `(` opens a slur on this note and a trailing `)` closes
-  ///   it (`c4:q( d4 e4)`); slurs may cross barlines but not nest.
+  ///   it (`c4:q( d4 e4)`); slurs may cross barlines and may nest — each
+  ///   `)` pairs with the most recent unmatched `(` (LIFO), so
+  ///   `c4:q(( e4) g4)` yields two slurs from c4.
   /// - A `{pitch,pitch}` prefix attaches grace notes (acciaccatura),
   ///   e.g. `{g4}a4:q` or `{f4,g4}a4:q`.
   /// - Articulation markers at the end of a note token: `'` staccato,
@@ -341,7 +343,7 @@ class Score {
     final lastOctaveByVoice = <int, int>{};
     final measures = <Measure>[];
     final slurs = <Slur>[];
-    String? openSlurStart;
+    final openSlurStarts = <String>[];
     for (final measureSource in notes.split('|')) {
       final voiceSources = measureSource.split(';');
       if (voiceSources.length > 4) {
@@ -465,8 +467,8 @@ class Score {
                 token.substring(fingerMatch.end);
           }
           var tied = false;
-          var opensSlur = false;
-          var closesSlur = false;
+          var opensSlur = 0;
+          var closesSlur = 0;
           var closesTuplet = false;
           Ornament? ornament;
           final articulations = <Articulation>{};
@@ -478,10 +480,10 @@ class Score {
                 tied = true;
                 token = token.substring(0, token.length - 1);
               case '(':
-                opensSlur = true;
+                opensSlur++;
                 token = token.substring(0, token.length - 1);
               case ')':
-                closesSlur = true;
+                closesSlur++;
                 token = token.substring(0, token.length - 1);
               case ']':
                 closesTuplet = true;
@@ -576,7 +578,7 @@ class Score {
             if (tied) {
               throw FormatException('A rest cannot be tied: "$token~"');
             }
-            if (opensSlur || closesSlur) {
+            if (opensSlur > 0 || closesSlur > 0) {
               throw FormatException('A rest cannot carry a slur: "$token"');
             }
             if (articulations.isNotEmpty) {
@@ -625,18 +627,16 @@ class Score {
                 id: id,
               ),
             );
-            if (closesSlur) {
-              if (openSlurStart == null) {
+            for (var k = 0; k < closesSlur; k++) {
+              if (openSlurStarts.isEmpty) {
                 throw FormatException('")" without an open slur: "$token)"');
               }
-              slurs.add(Slur(openSlurStart, id));
-              openSlurStart = null;
+              // A close pairs with the most recent unmatched open (LIFO), so
+              // nested slurs like `c4:q(( e4) g4)` resolve inside-out.
+              slurs.add(Slur(openSlurStarts.removeLast(), id));
             }
-            if (opensSlur) {
-              if (openSlurStart != null) {
-                throw const FormatException('Slurs cannot nest');
-              }
-              openSlurStart = id;
+            for (var k = 0; k < opensSlur; k++) {
+              openSlurStarts.add(id);
             }
           }
           if (closesTuplet) {
@@ -682,7 +682,7 @@ class Score {
         ),
       );
     }
-    if (openSlurStart != null) {
+    if (openSlurStarts.isNotEmpty) {
       throw const FormatException('Unclosed slur "("');
     }
     return Score(

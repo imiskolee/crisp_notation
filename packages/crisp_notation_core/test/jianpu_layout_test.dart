@@ -36,19 +36,17 @@ List<TextPrimitive> digitsOf(ScoreLayout layout) {
 }
 
 /// Horizontal lines at an underline level (below the digit row).
-List<LinePrimitive> underlinesOf(ScoreLayout layout) =>
-    layout.primitives
-        .whereType<LinePrimitive>()
-        .where((l) => l.from.y == l.to.y && l.from.y > 3.05)
-        .toList();
+List<LinePrimitive> underlinesOf(ScoreLayout layout) => layout.primitives
+    .whereType<LinePrimitive>()
+    .where((l) => l.from.y == l.to.y && l.from.y > 3.05)
+    .toList();
 
 List<String> describe(ScoreLayout layout) => [
       for (final p in layout.primitives)
         switch (p) {
           final GlyphPrimitive g => 'glyph:${g.smuflName}@${g.position}',
           final LinePrimitive l => 'line:${l.from}->${l.to}:${l.thickness}',
-          final BeamPrimitive b =>
-            'beam:${b.start}->${b.end}:${b.thickness}',
+          final BeamPrimitive b => 'beam:${b.start}->${b.end}:${b.thickness}',
           final CurvePrimitive c => 'curve:${c.start},${c.control1},'
               '${c.control2},${c.end}',
           final TextPrimitive t => 'text:${t.text}@${t.position}:${t.size}',
@@ -232,8 +230,7 @@ void main() {
       // c3 → 低八度点一个（栈底之下）；g5 → 高八度点一个（栈顶之上）；
       // 内层 e4 无点。
       expect(dots, hasLength(2));
-      final ys = dots.map((d) => d.position.y).toList()
-        ..sort();
+      final ys = dots.map((d) => d.position.y).toList()..sort();
       expect(ys.first, lessThan(1.0), reason: '高八度点在栈顶之上');
       expect(ys.last, greaterThan(4.0), reason: '低八度点在栈底之下');
     });
@@ -257,8 +254,7 @@ void main() {
       final box = metadata.bBoxOf(SmuflGlyph.accidentalFlat);
       final inkCenterY =
           flats.single.position.y - (box.swY + box.neY) / 2 * 0.5;
-      final midDigitCenterY =
-          digits[1].position.y - 0.68 * digits[1].size / 2;
+      final midDigitCenterY = digits[1].position.y - 0.68 * digits[1].size / 2;
       expect(inkCenterY, closeTo(midDigitCenterY, 1e-9),
           reason: '前缀与 ♭3 数字同高，而不是整栈居中');
       // 前缀在数字左侧。
@@ -283,17 +279,13 @@ void main() {
       // 墨迹底边 = origin.y − swY×0.5（装饰音以 _articScale=0.5 缩放）。
       final box = metadata.bBoxOf('ornamentTrill');
       final inkBottom = ornaments.single.position.y - box.swY * 0.5;
-      expect(inkBottom, lessThan(stackTopInk),
-          reason: '颤音在栈顶之上，不压最高音数字');
+      expect(inkBottom, lessThan(stackTopInk), reason: '颤音在栈顶之上，不压最高音数字');
     });
 
     test('technique mark suffixes parse onto the note (滑揉拨花厉换吐)', () {
-      NoteElement noteOf(String token) => Score.simple(notes: token)
-          .measures
-          .single
-          .voices
-          .single
-          .single as NoteElement;
+      NoteElement noteOf(String token) =>
+          Score.simple(notes: token).measures.single.voices.single.single
+              as NoteElement;
       expect(noteOf('c4:q/').techniques, {TechniqueMark.slideUp});
       expect(noteOf(r'c4:q\').techniques, {TechniqueMark.slideDown});
       expect(noteOf('c4:qH').techniques, {TechniqueMark.slideReturn});
@@ -359,7 +351,8 @@ void main() {
           .toList();
       expect(pair, hasLength(2), reason: '回滑音 = 上滑 + 下滑并排');
       // 组合墨迹区间的中心对齐数字中心。
-      final scoop = pair.firstWhere((g) => g.smuflName == SmuflGlyph.brassScoop);
+      final scoop =
+          pair.firstWhere((g) => g.smuflName == SmuflGlyph.brassScoop);
       final fall =
           pair.firstWhere((g) => g.smuflName == SmuflGlyph.brassFallLipShort);
       final sBox = metadata.bBoxOf(SmuflGlyph.brassScoop);
@@ -389,12 +382,10 @@ void main() {
           .whereType<TextPrimitive>()
           .singleWhere((t) => t.text == 'T');
       // y 轴向下：越靠上的记号 y 越小。
-      expect(staccato.position.y, lessThan(slideBottom),
-          reason: '断音在滑音之上');
+      expect(staccato.position.y, lessThan(slideBottom), reason: '断音在滑音之上');
       expect(trillBottom, lessThan(staccato.position.y - 0.7),
           reason: '颤音在断音之上');
-      expect(tonguing.position.y, lessThan(trillBottom),
-          reason: '吐音在装饰音之上');
+      expect(tonguing.position.y, lessThan(trillBottom), reason: '吐音在装饰音之上');
     });
 
     test('an ornament glyph sits above the digit (trill/mordent/turn)', () {
@@ -433,8 +424,9 @@ void main() {
     test('one octave up puts a dot above the digit', () {
       final layout = jianpuOf(Score.simple(notes: 'c5:q'));
       final digit = digitsOf(layout).single;
-      final dots = layout.primitives.whereType<GlyphPrimitive>().where(
-          (g) => (g.position.x - digit.position.x).abs() < 0.4);
+      final dots = layout.primitives
+          .whereType<GlyphPrimitive>()
+          .where((g) => (g.position.x - digit.position.x).abs() < 0.4);
       expect(dots, hasLength(1));
       expect(dots.single.position.y, lessThan(1.6)); // above the digit top
     });
@@ -442,8 +434,9 @@ void main() {
     test('one octave down puts a dot below the digit', () {
       final layout = jianpuOf(Score.simple(notes: 'c3:q'));
       final digit = digitsOf(layout).single;
-      final dots = layout.primitives.whereType<GlyphPrimitive>().where(
-          (g) => (g.position.x - digit.position.x).abs() < 0.4);
+      final dots = layout.primitives
+          .whereType<GlyphPrimitive>()
+          .where((g) => (g.position.x - digit.position.x).abs() < 0.4);
       expect(dots, hasLength(1));
       expect(dots.single.position.y, greaterThan(3.0));
     });
@@ -502,14 +495,14 @@ void main() {
     test('a dotted quarter gets an augmentation dot, no underline', () {
       final layout = jianpuOf(Score.simple(notes: 'c4:q.'));
       final digit = digitsOf(layout).single;
-      final dots = layout.primitives.whereType<GlyphPrimitive>().where(
-          (g) => g.position.x > digit.position.x);
+      final dots = layout.primitives
+          .whereType<GlyphPrimitive>()
+          .where((g) => g.position.x > digit.position.x);
       expect(dots, hasLength(1));
       expect(underlinesOf(layout), isEmpty);
     });
 
-    test('a dotted half is written with dashes only (jianpu convention)',
-        () {
+    test('a dotted half is written with dashes only (jianpu convention)', () {
       final layout = jianpuOf(Score.simple(notes: 'c4:h.'));
       final digit = digitsOf(layout).single;
       final dashes = layout.primitives
@@ -541,17 +534,15 @@ void main() {
                   t.position.y == JianpuLayoutEngine.digitBaseline))
             t.elementId!: (t.position.x - 0.45, t.position.x + 0.45)
         };
-        final dashes = layout.primitives.whereType<LinePrimitive>().where(
-            (l) =>
-                l.from.y == l.to.y &&
-                (l.from.y - 2.32).abs() < 0.01 &&
-                l.elementId != null);
+        final dashes = layout.primitives.whereType<LinePrimitive>().where((l) =>
+            l.from.y == l.to.y &&
+            (l.from.y - 2.32).abs() < 0.01 &&
+            l.elementId != null);
         for (final dash in dashes) {
           for (final entry in digitBoxes.entries) {
             if (entry.key == dash.elementId) continue;
             final (left, right) = entry.value;
-            expect(
-                dash.to.x <= left || dash.from.x >= right, isTrue,
+            expect(dash.to.x <= left || dash.from.x >= right, isTrue,
                 reason: '增时线 ${dash.from.x}..${dash.to.x} 压到了'
                     ' ${entry.key} 的数字墨盒 $left..$right');
           }
@@ -573,8 +564,8 @@ void main() {
       // 第一条覆盖前两个 digit (c4,d4)，第二条覆盖后两个 (e4,f4)
       lines.sort((a, b) => a.from.x.compareTo(b.from.x));
       expect(lines.first.from.x, lessThan(digits.first.position.x));
-      expect(lines.first.to.x,
-          greaterThan(digits[1].position.x)); // 到第二个digit之后
+      expect(
+          lines.first.to.x, greaterThan(digits[1].position.x)); // 到第二个digit之后
       expect(lines.last.to.x, greaterThan(digits.last.position.x));
     });
 
@@ -656,8 +647,7 @@ void main() {
       expect(level1.to.x, greaterThanOrEqualTo(dot.position.x + 0.2 - 1e-9));
     });
 
-    test('underline covers both dots of a trailing double-dotted eighth',
-        () {
+    test('underline covers both dots of a trailing double-dotted eighth', () {
       // 复附点八分音符在拍尾：减时线必须越过第二个附点的墨迹右缘。
       final layout = jianpuOf(Score.simple(
         notes: 'c4:s d4:e..',
@@ -670,10 +660,10 @@ void main() {
       expect(dots, hasLength(2));
       final lastDot =
           dots.reduce((a, b) => a.position.x > b.position.x ? a : b);
-      final level1 = underlinesOf(layout)
-          .reduce((a, b) => a.to.x > b.to.x ? a : b);
-      expect(level1.to.x,
-          greaterThanOrEqualTo(lastDot.position.x + 0.2 - 1e-9));
+      final level1 =
+          underlinesOf(layout).reduce((a, b) => a.to.x > b.to.x ? a : b);
+      expect(
+          level1.to.x, greaterThanOrEqualTo(lastDot.position.x + 0.2 - 1e-9));
     });
   });
 
@@ -743,8 +733,7 @@ void main() {
       // (thin/2 + barlineSeparation + thick/2 = 0.73 with the defaults).
       final maxX =
           verticals.map((l) => l.from.x).reduce((a, b) => a > b ? a : b);
-      final atEnd =
-          verticals.where((l) => maxX - l.from.x < 0.8).toList();
+      final atEnd = verticals.where((l) => maxX - l.from.x < 0.8).toList();
       expect(atEnd.length, greaterThanOrEqualTo(2));
       expect(atEnd.map((l) => l.thickness).toSet(), hasLength(2));
     });
@@ -777,8 +766,8 @@ void main() {
     // 后反复号与后一段落的前反复号，合并为一个符号，两者的粗纵线合用一条。
     test('adjacent endRepeat + startRepeat share one thick line (5.8.2.2c)',
         () {
-      final layout = jianpuOf(
-          Score.simple(notes: 'c4:q !endrepeat | !repeat d4:q e4:q'));
+      final layout =
+          jianpuOf(Score.simple(notes: 'c4:q !endrepeat | !repeat d4:q e4:q'));
       // Combined repeat symbol should have 4 dots (2 left + 2 right) ...
       final dots = layout.primitives
           .whereType<GlyphPrimitive>()
@@ -815,14 +804,12 @@ void main() {
       final voltaLines = layout.primitives
           .whereType<LinePrimitive>()
           .where((l) => l.thickness > 0.1 && l.thickness < 0.18)
-          .where((l) =>
-              l.from.y < 1.0 && l.to.y < 1.0) // volta is above the staff
+          .where(
+              (l) => l.from.y < 1.0 && l.to.y < 1.0) // volta is above the staff
           .toList();
       // Should have: 1 horizontal + 2 vertical (left + right) = 3 lines
-      final horizontal =
-          voltaLines.where((l) => l.from.y == l.to.y).toList();
-      final vertical =
-          voltaLines.where((l) => l.from.x == l.to.x).toList();
+      final horizontal = voltaLines.where((l) => l.from.y == l.to.y).toList();
+      final vertical = voltaLines.where((l) => l.from.x == l.to.x).toList();
       expect(horizontal, hasLength(1), reason: 'one horizontal volta line');
       expect(vertical, hasLength(2),
           reason: 'two vertical volta lines (left + right)');
@@ -837,8 +824,8 @@ void main() {
 
     // GB/T 46845-2025 §5.2.2: 虚小节线是垂直细虚线。
     test('a dashed barline draws short vertical segments (5.2.2)', () {
-      final layout = jianpuOf(
-          Score.simple(notes: 'c4:q d4 !barline=dashed e4:q f4'));
+      final layout =
+          jianpuOf(Score.simple(notes: 'c4:q d4 !barline=dashed e4:q f4'));
       final verticals = layout.primitives
           .whereType<LinePrimitive>()
           .where((l) => l.from.x == l.to.x)
@@ -850,8 +837,7 @@ void main() {
       for (final l in verticals) {
         byX.putIfAbsent((l.from.x * 100).round(), () => []).add(l);
       }
-      final dashed =
-          byX.entries.where((e) => e.value.length >= 3).toList();
+      final dashed = byX.entries.where((e) => e.value.length >= 3).toList();
       expect(dashed, hasLength(1),
           reason: 'one x position holds the dashed barline segments');
       final segments = dashed.single.value;
@@ -863,14 +849,11 @@ void main() {
       // centre down to the first 减时线 — slightly beyond the digit ink
       // box); the dash tiling starts flush at the top and lands within one
       // dash length of the bottom.
-      final top = segments
-          .map((s) => s.from.y)
-          .reduce((a, b) => a < b ? a : b);
+      final top = segments.map((s) => s.from.y).reduce((a, b) => a < b ? a : b);
       final bottom =
           segments.map((s) => s.to.y).reduce((a, b) => a > b ? a : b);
       expect(top, JianpuLayoutEngine.barlineTop);
-      expect(bottom,
-          greaterThan(JianpuLayoutEngine.barlineBottom - 0.33));
+      expect(bottom, greaterThan(JianpuLayoutEngine.barlineBottom - 0.33));
     });
 
     // 简谱小节线只收小节末尾：行首（第一个小节开头）不画任何纵线。
@@ -881,8 +864,7 @@ void main() {
           .where((l) => l.from.x == l.to.x)
           .where((l) => l.from.x < settings.leadingPadding)
           .toList();
-      expect(leading, isEmpty,
-          reason: '行首不画连谱线/小节线');
+      expect(leading, isEmpty, reason: '行首不画连谱线/小节线');
       // The measure content is not shifted: it still starts at the leading
       // padding.
       expect(layout.measureRegions.single.startX,
@@ -901,8 +883,8 @@ void main() {
         expect(bar.to.y, JianpuLayoutEngine.barlineBottom);
       }
       // 比数字墨盒（digitTop…digitBaseline）略高。
-      expect(JianpuLayoutEngine.barlineTop,
-          lessThan(JianpuLayoutEngine.digitTop));
+      expect(
+          JianpuLayoutEngine.barlineTop, lessThan(JianpuLayoutEngine.digitTop));
       expect(JianpuLayoutEngine.barlineBottom,
           greaterThan(JianpuLayoutEngine.digitBaseline));
     });
@@ -932,21 +914,17 @@ void main() {
     });
 
     test('a triplet draws an open bracket with the ratio digit above', () {
-      final layout =
-          jianpuOf(Score.simple(notes: '3[c4:e d4 e4] f4:e c4:q'));
+      final layout = jianpuOf(Score.simple(notes: '3[c4:e d4 e4] f4:e c4:q'));
       // 括线：两条横线（中央断开）+ 两个端钩，共 4 条线段在 _tupletY 一带。
       final horizontals = layout.primitives
           .whereType<LinePrimitive>()
           .where((l) => l.from.y == l.to.y && l.from.y < 1.0)
           .toList();
-      expect(horizontals, hasLength(2),
-          reason: '连音符括线中央为数字断开');
+      expect(horizontals, hasLength(2), reason: '连音符括线中央为数字断开');
       final hooks = layout.primitives
           .whereType<LinePrimitive>()
-          .where((l) =>
-              l.from.x == l.to.x &&
-              l.from.y < 1.0 &&
-              l.to.y > l.from.y)
+          .where(
+              (l) => l.from.x == l.to.x && l.from.y < 1.0 && l.to.y > l.from.y)
           .toList();
       expect(hooks, hasLength(2), reason: '括线两端各有一个下折短钩');
       // 比例数字 "3" 写在断口中央，位于数字行上方（排除音级数字 3：
@@ -954,8 +932,7 @@ void main() {
       final mark = layout.primitives
           .whereType<TextPrimitive>()
           .where((t) =>
-              t.text == '3' &&
-              t.position.y != JianpuLayoutEngine.digitBaseline)
+              t.text == '3' && t.position.y != JianpuLayoutEngine.digitBaseline)
           .toList();
       expect(mark, hasLength(1));
       final digits = digitsOf(layout);
@@ -991,8 +968,8 @@ void main() {
           .where((t) => t.text == 'la' || t.text == 'li');
       expect(lyrics, hasLength(2));
       for (final lyric in lyrics) {
-        expect(lyric.position.y,
-            greaterThan(underlinesOf(layout).single.from.y));
+        expect(
+            lyric.position.y, greaterThan(underlinesOf(layout).single.from.y));
       }
     });
 
@@ -1011,8 +988,7 @@ void main() {
       expect(f.single.position.y, greaterThan(4.0));
     });
 
-    test('vocal score (with lyrics): dynamics go above the staff (6.7.3)',
-        () {
+    test('vocal score (with lyrics): dynamics go above the staff (6.7.3)', () {
       final score = Score.simple(
         notes: 'c4:q d4',
         lyrics: 'do re',
@@ -1029,8 +1005,8 @@ void main() {
     });
 
     test('an annotation draws above the digits', () {
-      final layout = jianpuOf(
-          Score.simple(notes: 'c4:q d4', annotations: 'Allegro *'));
+      final layout =
+          jianpuOf(Score.simple(notes: 'c4:q d4', annotations: 'Allegro *'));
       final a = layout.primitives
           .whereType<TextPrimitive>()
           .where((t) => t.text == 'Allegro');
@@ -1123,8 +1099,8 @@ void main() {
         staffType: StaffType.jianpu,
       ));
       final barX = barlineXsOf(layout).first;
-      final nearBar = underlinesOf(layout).where((l) =>
-          (l.to.x - barX).abs() < 0.3 || (l.from.x - barX).abs() < 0.3);
+      final nearBar = underlinesOf(layout).where(
+          (l) => (l.to.x - barX).abs() < 0.3 || (l.from.x - barX).abs() < 0.3);
       expect(nearBar, isEmpty,
           reason: 'no underline level may reach the barline');
     });
@@ -1164,12 +1140,11 @@ void main() {
     });
 
     test('double sharp and double flat prefixes', () {
-      final layout = jianpuOf(Score.simple(
-          notes: 'c4:q c##4 cn4 dbb4'));
+      final layout = jianpuOf(Score.simple(notes: 'c4:q c##4 cn4 dbb4'));
       final prefixes = prefixesOf(layout);
       // 重升画两个独立的 ♯ 字形；重降是专用的 SMuFL 字形。
-      expect(prefixes.where((g) => g == SmuflGlyph.accidentalSharp),
-          hasLength(2));
+      expect(
+          prefixes.where((g) => g == SmuflGlyph.accidentalSharp), hasLength(2));
       expect(prefixes, contains(SmuflGlyph.accidentalDoubleFlat));
     });
 
@@ -1228,9 +1203,8 @@ void main() {
           layout.primitives.whereType<TextPrimitive>().map((t) => t.text);
       expect(texts, contains('1='));
       expect(texts, contains(letter));
-      final glyphs = layout.primitives
-          .whereType<GlyphPrimitive>()
-          .map((g) => g.smuflName);
+      final glyphs =
+          layout.primitives.whereType<GlyphPrimitive>().map((g) => g.smuflName);
       if (accidentalGlyph != null) {
         expect(glyphs, contains(accidentalGlyph));
       }
@@ -1289,8 +1263,9 @@ void main() {
       final pair = digitsOf(jianpuOf(Score.simple(notes: 'c4:q d4')));
       final cell = pair[1].position.x - pair[0].position.x;
       final digitX = digitsOf(half).single.position.x;
-      final dash = half.primitives.whereType<LinePrimitive>().firstWhere(
-          (l) => l.from.y == l.to.y && l.from.x > digitX);
+      final dash = half.primitives
+          .whereType<LinePrimitive>()
+          .firstWhere((l) => l.from.y == l.to.y && l.from.x > digitX);
       final dashCenter = (dash.from.x + dash.to.x) / 2;
       expect(dashCenter - digitX, closeTo(cell, 1e-9));
       expect(dash.to.x - dash.from.x, closeTo(1.1, 1e-9), // ≈ 数字墨宽
@@ -1311,8 +1286,7 @@ void main() {
       expect(ys, {1.95, 2.65});
     });
 
-    test('high and low octave dots sit at the same gap from the digit box',
-        () {
+    test('high and low octave dots sit at the same gap from the digit box', () {
       final hiY = jianpuOf(Score.simple(notes: 'c5:q'))
           .primitives
           .whereType<GlyphPrimitive>()
@@ -1353,8 +1327,8 @@ void main() {
       final plainDigits = digitsOf(without);
       // 第一个音位置不变；带记号的第二个数字整体右移一个前缀外推量。
       expect(accDigits.first.position.x, plainDigits.first.position.x);
-      expect(accDigits[1].position.x - plainDigits[1].position.x,
-          greaterThan(0));
+      expect(
+          accDigits[1].position.x - plainDigits[1].position.x, greaterThan(0));
       // 记号墨迹左缘不越过本元素的格位起点（即无记号时第二个数字的 x），
       // 因此不会压上前一个元素的右侧。
       final sharp = withAcc.primitives
@@ -1362,8 +1336,7 @@ void main() {
           .firstWhere((g) => g.smuflName == SmuflGlyph.accidentalSharp);
       final inkLeft = sharp.position.x +
           metadata.bBoxOf(SmuflGlyph.accidentalSharp).swX * sharp.scale;
-      expect(inkLeft,
-          greaterThanOrEqualTo(plainDigits[1].position.x - 1e-9));
+      expect(inkLeft, greaterThanOrEqualTo(plainDigits[1].position.x - 1e-9));
     });
 
     test('augmentation dot is bottom-aligned with the digit', () {
@@ -1410,8 +1383,8 @@ void main() {
       expect(tenuto.scale, 0.5,
           reason: 'SMuFL marks scale to the digit em (2 ss of 4)');
       // articTenutoAbove 的 swY = 0 → 墨迹底 = origin y = digitTop − 0.15
-      expect(tenuto.position.y,
-          closeTo(JianpuLayoutEngine.digitTop - 0.15, 1e-9));
+      expect(
+          tenuto.position.y, closeTo(JianpuLayoutEngine.digitTop - 0.15, 1e-9));
     });
   });
 }

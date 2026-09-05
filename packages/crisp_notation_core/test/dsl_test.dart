@@ -77,7 +77,8 @@ void main() {
   group('octave inheritance', () {
     List<int> octavesOf(Score score) => [
           for (final m in score.measures)
-            for (final e in m.elements) (e as NoteElement).pitches.single.octave,
+            for (final e in m.elements)
+              (e as NoteElement).pitches.single.octave,
         ];
 
     test('a pitch without an octave reuses the previous pitch\'s octave', () {
@@ -99,7 +100,10 @@ void main() {
     test('rests leave the running octave untouched', () {
       final notes = Score.simple(notes: 'c5 r:e d').measures.single.elements;
       expect(
-        [for (final e in notes.whereType<NoteElement>()) e.pitches.single.octave],
+        [
+          for (final e in notes.whereType<NoteElement>())
+            e.pitches.single.octave
+        ],
         [5, 5],
       );
     });
@@ -135,7 +139,10 @@ void main() {
       expect([for (final p in note.graceNotes) p.octave], [5, 5]);
       expect(note.pitches.single.octave, 5);
       expect(
-        (score.measures.single.elements[2] as NoteElement).pitches.single.octave,
+        (score.measures.single.elements[2] as NoteElement)
+            .pitches
+            .single
+            .octave,
         5,
       );
     });
@@ -143,17 +150,24 @@ void main() {
     test('each voice keeps its own running octave', () {
       final score = Score.simple(notes: 'c4:q d ; c3:h e | f:h ; g:h');
       expect(
-        [for (final e in score.measures[0].elements)
-          (e as NoteElement).pitches.single.octave],
+        [
+          for (final e in score.measures[0].elements)
+            (e as NoteElement).pitches.single.octave
+        ],
         [4, 4],
       );
       expect(
-        [for (final e in score.measures[0].voice2)
-          (e as NoteElement).pitches.single.octave],
+        [
+          for (final e in score.measures[0].voice2)
+            (e as NoteElement).pitches.single.octave
+        ],
         [3, 3],
       );
       expect(
-        (score.measures[1].elements.single as NoteElement).pitches.single.octave,
+        (score.measures[1].elements.single as NoteElement)
+            .pitches
+            .single
+            .octave,
         4,
       );
       expect(

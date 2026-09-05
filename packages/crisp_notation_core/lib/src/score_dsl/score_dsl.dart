@@ -155,7 +155,7 @@ ScoreDslDocument parseScoreDsl(String source) {
   }
   if (i >= lines.length) {
     throw FormatException(
-      'line $metaStart: missing --- to close metadata block');
+        'line $metaStart: missing --- to close metadata block');
   }
   final meta = _parseMetadata(lines.sublist(metaStart, i), metaStart);
   i++; // skip ---
@@ -171,7 +171,7 @@ ScoreDslDocument parseScoreDsl(String source) {
     final header = lines[i].trim();
     if (!header.startsWith(':')) {
       throw FormatException(
-        'line ${i + 1}: expected track block (:name), got "$header"');
+          'line ${i + 1}: expected track block (:name), got "$header"');
     }
     final trackName = header.substring(1).trim();
     if (trackName.isEmpty) {
@@ -209,7 +209,7 @@ ScoreDslDocument parseScoreDsl(String source) {
         fieldLines[currentField]!.add(raw.trim());
       } else {
         throw FormatException(
-          'line ${i + 1}: content before any field declaration');
+            'line ${i + 1}: content before any field declaration');
       }
       i++;
     }
@@ -287,13 +287,12 @@ ScoreDslMeta _parseMetadata(List<String> lines, int offset) {
           tempo = int.tryParse(value);
           if (tempo == null) {
             throw FormatException(
-              'line $lineNo: invalid tempo "$value" (expected integer BPM)');
+                'line $lineNo: invalid tempo "$value" (expected integer BPM)');
           }
         case 'layout':
           if (value != 'page' && value != 'single') {
-            throw FormatException(
-              'line $lineNo: invalid layout "$value" '
-              '(expected "page" or "single")');
+            throw FormatException('line $lineNo: invalid layout "$value" '
+                '(expected "page" or "single")');
           }
           layout = value;
         case 'tracks':
@@ -311,8 +310,8 @@ ScoreDslMeta _parseMetadata(List<String> lines, int offset) {
         case 'instrument':
           instrument = value;
         default:
-          // Unknown metadata fields are silently ignored — this keeps
-          // the parser forward-compatible with renderer-level extensions.
+        // Unknown metadata fields are silently ignored — this keeps
+        // the parser forward-compatible with renderer-level extensions.
       }
     } else {
       final t = line.trim();
@@ -411,7 +410,8 @@ ScoreDslResult compileScoreDsl(ScoreDslDocument doc) {
   final timeSig = doc.meta.timeSignature != null
       ? _parseTimeSignature(doc.meta.timeSignature!)
       : null;
-  final tempo = doc.meta.tempo != null ? Tempo(doc.meta.tempo!.toDouble()) : null;
+  final tempo =
+      doc.meta.tempo != null ? Tempo(doc.meta.tempo!.toDouble()) : null;
   final metadata = ScoreMetadata(
     title: doc.meta.title,
     composer: doc.meta.authors,
@@ -426,14 +426,13 @@ ScoreDslResult compileScoreDsl(ScoreDslDocument doc) {
     final decl = doc.meta.trackDecls[di];
     if (decl.type == 'lyrics') continue;
     if (decl.type == 'tablature' || decl.type == 'percussion') {
-      throw FormatException(
-        'track type "${decl.type}" is not yet implemented');
+      throw FormatException('track type "${decl.type}" is not yet implemented');
     }
 
     final body = doc.bodies.firstWhere(
       (b) => b.name == decl.name,
       orElse: () => throw FormatException(
-        'track "${decl.name}" has no :${decl.name} block'),
+          'track "${decl.name}" has no :${decl.name} block'),
     );
 
     // Join all notes: lines, then drop empty measure segments: a trailing
@@ -445,7 +444,7 @@ ScoreDslResult compileScoreDsl(ScoreDslDocument doc) {
         .join('|');
     if (notesStr.isEmpty) {
       throw FormatException(
-        'track "${decl.name}" (type: ${decl.type}) is missing notes:');
+          'track "${decl.name}" (type: ${decl.type}) is missing notes:');
     }
 
     final staffType = _parseStaffType(decl.type);
@@ -486,10 +485,9 @@ ScoreDslResult compileScoreDsl(ScoreDslDocument doc) {
     final ref = staves.first.measures.length;
     for (var si = 1; si < staves.length; si++) {
       if (staves[si].measures.length != ref) {
-        throw FormatException(
-          'measure count mismatch: '
-          '${staffTrackNames[0]} $ref, '
-          '${staffTrackNames[si]} ${staves[si].measures.length}');
+        throw FormatException('measure count mismatch: '
+            '${staffTrackNames[0]} $ref, '
+            '${staffTrackNames[si]} ${staves[si].measures.length}');
       }
     }
   }
@@ -548,15 +546,39 @@ ScoreDslResult loadScoreDsl(String source) =>
 // ---------------------------------------------------------------------------
 
 const _majorScaleToFifths = <String, int>{
-  'C': 0, 'C#': 7, 'Cb': -7,
-  'G': 1, 'D': 2, 'A': 3, 'E': 4, 'B': 5,
+  'C': 0,
+  'C#': 7,
+  'Cb': -7,
+  'G': 1,
+  'D': 2,
+  'A': 3,
+  'E': 4,
+  'B': 5,
   'F#': 6,
-  'F': -1, 'Bb': -2, 'Eb': -3, 'Ab': -4, 'Db': -5, 'Gb': -6,
+  'F': -1,
+  'Bb': -2,
+  'Eb': -3,
+  'Ab': -4,
+  'Db': -5,
+  'Gb': -6,
 };
 
 const _minorScaleToFifths = <String, int>{
-  'A': 0, 'E': 1, 'B': 2, 'F#': 3, 'C#': 4, 'G#': 5, 'D#': 6, 'A#': 7,
-  'D': -1, 'G': -2, 'C': -3, 'F': -4, 'Bb': -5, 'Eb': -6, 'Ab': -7,
+  'A': 0,
+  'E': 1,
+  'B': 2,
+  'F#': 3,
+  'C#': 4,
+  'G#': 5,
+  'D#': 6,
+  'A#': 7,
+  'D': -1,
+  'G': -2,
+  'C': -3,
+  'F': -4,
+  'Bb': -5,
+  'Eb': -6,
+  'Ab': -7,
 };
 
 KeySignature _parseScale(String scale) {
@@ -566,7 +588,7 @@ KeySignature _parseScale(String scale) {
   // 'b' alone is illegal (ambiguous with the flat sign).
   if (trimmed == 'b') {
     throw FormatException(
-      'invalid scale "b" — use "Bb" for B-flat major or "B" for B major');
+        'invalid scale "b" — use "Bb" for B-flat major or "B" for B major');
   }
 
   final isMinor = trimmed.length > 1 && trimmed.toLowerCase().endsWith('m');
@@ -579,7 +601,7 @@ KeySignature _parseScale(String scale) {
   final fifths = table[normalized];
   if (fifths == null) {
     throw FormatException(
-      'invalid scale "$scale" (expected e.g. C, G, Bb, F#, Am)');
+        'invalid scale "$scale" (expected e.g. C, G, Bb, F#, Am)');
   }
   return KeySignature(fifths);
 }
@@ -587,8 +609,7 @@ KeySignature _parseScale(String scale) {
 TimeSignature _parseTimeSignature(String source) {
   final m = RegExp(r'^(\d+)/(\d+)$').firstMatch(source.trim());
   if (m == null) {
-    throw FormatException(
-      'invalid time signature "$source" (expected "N/M")');
+    throw FormatException('invalid time signature "$source" (expected "N/M")');
   }
   final beats = int.parse(m[1]!);
   final beatUnit = int.parse(m[2]!);
