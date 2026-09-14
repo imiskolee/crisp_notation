@@ -120,6 +120,13 @@ abstract final class MusicFonts {
       final source = await rootBundle.loadString(font.metadataAsset);
       final metadata =
           SmuflMetadata.fromJson(jsonDecode(source) as Map<String, Object?>);
+      final asset = font.fontAsset;
+      if (asset != null) {
+        final family = font.package == null
+            ? font.family
+            : 'packages/${font.package}/${font.family}';
+        await (FontLoader(family)..addFont(rootBundle.load(asset))).load();
+      }
       _cache[font.family] = metadata;
       return metadata;
     } catch (_) {

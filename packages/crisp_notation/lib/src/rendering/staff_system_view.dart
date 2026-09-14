@@ -79,6 +79,15 @@ class StaffSystemView extends LeafRenderObjectWidget {
   /// — no external [onElementTap] / [highlightedIds] wiring required.
   final bool tapToHighlight;
 
+  /// Label the first bar of every system row (including the first) with its
+  /// global measure number, just above the top staff line at the left edge.
+  final bool showMeasureNumbers;
+
+  /// Paint each staff's `ScoreMetadata.instrument` (part/track name) above
+  /// the first bar of its staff on every system row. Staves with an empty
+  /// instrument are skipped.
+  final bool showStaffLabels;
+
   /// Creates a staff-system view.
   const StaffSystemView({
     super.key,
@@ -96,6 +105,8 @@ class StaffSystemView extends LeafRenderObjectWidget {
     this.showNoteOctaves = false,
     this.noteNameStyle = NoteNameStyle.letter,
     this.tapToHighlight = false,
+    this.showMeasureNumbers = false,
+    this.showStaffLabels = false,
   });
 
   @override
@@ -114,6 +125,8 @@ class StaffSystemView extends LeafRenderObjectWidget {
         showNoteOctaves: showNoteOctaves,
         noteNameStyle: noteNameStyle,
         tapToHighlight: tapToHighlight,
+        showMeasureNumbers: showMeasureNumbers,
+        showStaffLabels: showStaffLabels,
       )..onElementTap = onElementTap;
 
   @override
@@ -133,7 +146,9 @@ class StaffSystemView extends LeafRenderObjectWidget {
       ..showNoteNames = showNoteNames
       ..showNoteOctaves = showNoteOctaves
       ..noteNameStyle = noteNameStyle
-      ..tapToHighlight = tapToHighlight;
+      ..tapToHighlight = tapToHighlight
+      ..showMeasureNumbers = showMeasureNumbers
+      ..showStaffLabels = showStaffLabels;
   }
 }
 
@@ -234,6 +249,8 @@ class RenderStaffSystemView extends RenderBox {
     required bool showNoteOctaves,
     required NoteNameStyle noteNameStyle,
     bool tapToHighlight = false,
+    bool showMeasureNumbers = false,
+    bool showStaffLabels = false,
   })  : _system = system,
         _theme = theme,
         _staffSpace = staffSpace,
@@ -246,7 +263,9 @@ class RenderStaffSystemView extends RenderBox {
         _showNoteNames = showNoteNames,
         _showNoteOctaves = showNoteOctaves,
         _noteNameStyle = noteNameStyle,
-        _tapToHighlight = tapToHighlight {
+        _tapToHighlight = tapToHighlight,
+        _showMeasureNumbers = showMeasureNumbers,
+        _showStaffLabels = showStaffLabels {
     _tap = TapGestureRecognizer(debugOwner: this)..onTapUp = _handleTapUp;
   }
 
@@ -273,6 +292,28 @@ class RenderStaffSystemView extends RenderBox {
     if (_tapToHighlight == value) return;
     _tapToHighlight = value;
     if (!value) _highlightedIds.clear();
+    markNeedsPaint();
+  }
+
+  bool _showMeasureNumbers;
+
+  /// Whether to label the first bar of every system row with its global
+  /// measure number (repaint-only).
+  bool get showMeasureNumbers => _showMeasureNumbers;
+  set showMeasureNumbers(bool value) {
+    if (_showMeasureNumbers == value) return;
+    _showMeasureNumbers = value;
+    markNeedsPaint();
+  }
+
+  bool _showStaffLabels;
+
+  /// Whether to paint each staff's `ScoreMetadata.instrument` above the
+  /// first bar of its staff on every system row (repaint-only).
+  bool get showStaffLabels => _showStaffLabels;
+  set showStaffLabels(bool value) {
+    if (_showStaffLabels == value) return;
+    _showStaffLabels = value;
     markNeedsPaint();
   }
 
@@ -413,6 +454,31 @@ class RenderStaffSystemView extends RenderBox {
 
   /// The laid-out system (for tests / interaction geometry).
   StaffSystemLayout? get systemLayout => _layout;
+  Rect? measureBounds(int measureIndex) {
+    if (!hasSize || measureIndex < 0) return null;
+    Rect? bounds(StaffSystemLayout layout, int localIndex, double y) {
+      final regions = layout.staves.first.measureRegions;
+      if (localIndex >= regions.length) return null;
+      final region = regions[localIndex];
+      return Rect.fromLTRB(
+        (leftInset + region.startX) * _scale,
+        y,
+        (leftInset + region.endX) * _scale,
+        y + layout.height * _scale,
+      ).intersect(Offset.zero & size);
+    }
+
+    final layout = _layout;
+    if (layout != null) return bounds(layout, measureIndex, 0);
+    var y = 0.0;
+    for (final row in _systems?.systems ?? <StaffSystemSystem>[]) {
+      if (measureIndex >= row.firstMeasure && measureIndex <= row.lastMeasure) {
+        return bounds(row.layout, measureIndex - row.firstMeasure, y);
+      }
+      y += (row.layout.height + _systemGap) * _scale;
+    }
+    return null;
+  }
 
   /// Pixel origin (where its own y=0 maps) of staff [i].
   Offset staffOrigin(int i) {
@@ -491,7 +557,14 @@ class RenderStaffSystemView extends RenderBox {
   }
 
   @override
-  void performLayout() => size = _measure(constraints);
+  void performLayout() {
+    if (MusicFonts.metadataOrNull(_theme.musicFont) == null) {
+      MusicFonts.load(_theme.musicFont).then((_) {
+        if (attached) markNeedsLayout();
+      });
+    }
+    size = _measure(constraints);
+  }
 
   @override
   Size computeDryLayout(BoxConstraints constraints) => _measure(constraints);
@@ -572,6 +645,12 @@ class RenderStaffSystemView extends RenderBox {
     final layout = _layout;
     if (layout != null) {
       _paintOneLayout(context.canvas, offset, layout);
+      if (_showMeasureNumbers) {
+        _paintMeasureNumber(context.canvas, offset, 0);
+      }
+      if (_showStaffLabels) {
+        _paintStaffLabels(context.canvas, offset, layout);
+      }
       return;
     }
     final systems = _systems;
@@ -579,8 +658,66 @@ class RenderStaffSystemView extends RenderBox {
     final systemGap = _systemGap;
     var yCursor = 0.0;
     for (final sys in systems.systems) {
-      _paintOneLayout(context.canvas, offset + Offset(0, yCursor), sys.layout);
+      final origin = offset + Offset(0, yCursor);
+      _paintOneLayout(context.canvas, origin, sys.layout);
+      if (_showMeasureNumbers) {
+        _paintMeasureNumber(context.canvas, origin, sys.firstMeasure);
+      }
+      if (_showStaffLabels) {
+        _paintStaffLabels(context.canvas, origin, sys.layout);
+      }
       yCursor += sys.layout.height * _scale + systemGap * _scale;
+    }
+  }
+
+  /// Labels the first bar of a system row with its global measure number,
+  /// just above the top staff line at the left edge (same convention as
+  /// [MultiSystemView]).
+  void _paintMeasureNumber(Canvas canvas, Offset origin, int firstMeasure) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '${firstMeasure + 1}',
+        style: TextStyle(
+          color: _theme.staffColor,
+          fontSize: 0.9 * _scale,
+          fontFamily: _theme.textFontFamily,
+          fontFamilyFallback: _theme.textFontFamilyFallback,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(
+      canvas,
+      Offset(origin.dx + 0.2 * _scale, origin.dy - 2.1 * _scale),
+    );
+  }
+
+  /// Paints each staff's `ScoreMetadata.instrument` (part/track name) above
+  /// the first bar of its staff; staves with an empty instrument are skipped.
+  void _paintStaffLabels(
+      Canvas canvas, Offset offset, StaffSystemLayout layout) {
+    for (var i = 0; i < layout.staves.length; i++) {
+      final label = layout.source.staves[i].metadata.instrument;
+      if (label == null || label.trim().isEmpty) continue;
+      final origin = offset + _staffOriginForLayout(layout, i);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: _theme.staffColor,
+            fontSize: 0.9 * _scale,
+            fontFamily: _theme.textFontFamily,
+            fontFamilyFallback: _theme.textFontFamilyFallback,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(
+        canvas,
+        Offset(origin.dx + 0.2 * _scale, origin.dy - 1.5 * _scale),
+      );
     }
   }
 

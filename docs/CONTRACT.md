@@ -965,8 +965,15 @@ each, concatenated.
   paginated `MultiPartScore` (§5h). `RenderMultiPartView` is public and
   implements `ElementRegionProvider`.
 - `StaffSystemView(system, {theme, staffSpace, staffGap = 4.0, gridAlign = true,
-  hideEmptyStaves = false, highlightedIds, onElementTap})` — a single
+  hideEmptyStaves = false, highlightedIds, onElementTap, layoutMode, systemGap,
+  showNoteNames, showNoteOctaves, noteNameStyle, tapToHighlight,
+  showMeasureNumbers = false, showStaffLabels = false})` — a single
   un-paginated `StaffSystem` (`staffSpace` null = fit to width).
+  `showMeasureNumbers` labels the first bar of every system row (including
+  the first) with its global measure number above the top staff line at the
+  left edge; `showStaffLabels` paints each staff's
+  `ScoreMetadata.instrument` above the first bar of its staff on every
+  system row (empty labels skipped). Both are repaint-only toggles.
   `RenderStaffSystemView` is public.
 
 ## 7. Interaction (`crisp_notation`)

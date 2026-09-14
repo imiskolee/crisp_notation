@@ -241,15 +241,59 @@ class JianpuLayoutEngine {
     return (num * 4 / den).round();
   }
 
-  /// Pitch → (digit 1..7, deviation, octave-dot count).
-  static (int, int, int) _degreeOf(
+  /// Respells [pitch] enharmonically to a key-natural note of [key] when one
+  /// exists in the same octave. Returns [pitch] unchanged if no key-natural
+  /// enharmonic equivalent exists.
+  ///
+  /// Only **white-key naturals** (alter 0 — a bare letter or an explicit `n`)
+  /// are eligible for respelling. An explicit chromatic alteration (`f#`,
+  /// `bb`, `c##`, …) is preserved as written so its accidental prefix draws
+  /// correctly. The musician's intent for `f` in C♯ major is the white key
+  /// F = E♯ = scale degree 3; respelling to E♯ yields digit 3 with no
+  /// prefix, instead of the literal `♭4` the letter F would otherwise
+  /// produce.
+  ///
+  /// When [pitch] is already a key-natural note (letter + alter matches
+  /// `key.alterFor(letter)`), it is returned unchanged.
+  static Pitch respellToKey(Pitch pitch, KeySignature key) {
+    if (pitch.alter != 0 || pitch.microtone != null) return pitch;
+    final midi = pitch.midiNumber;
+    // Search the pitch's octave and the octaves immediately above/below for a
+    // key-natural enharmonic equivalent. Bare letters are white-key naturals
+    // that often coincide with a key-natural note in an adjacent octave —
+    // e.g. C4 = B#3 in C♯ major (B is the key's 7th, sounded an octave below
+    // middle C#4). Without the cross-octave search, `c4` in C♯ major would
+    // render as `♭1` instead of the correct low-octave `7`.
+    for (final step in Step.values) {
+      final naturalAlter = key.alterFor(step);
+      for (var delta = -1; delta <= 1; delta++) {
+        final oct = pitch.octave + delta;
+        final naturalMidi =
+            (oct + 1) * 12 + step.semitonesFromC + naturalAlter;
+        if (naturalMidi != midi) continue;
+        if (step == pitch.step && naturalAlter == pitch.alter && delta == 0) {
+          return pitch;
+        }
+        return Pitch(step, alter: naturalAlter, octave: oct);
+      }
+    }
+    return pitch;
+  }
+
+  /// Pitch → (digit 1..7, deviation, octave-dot count, respelled pitch).
+  ///
+  /// The returned [Pitch] is the enharmonically respelled form (see
+  /// [respellToKey]) used to compute digit/deviation/dots; callers that
+  /// need a memory key per pitch should use `result.$4.step.index`.
+  static (int, int, int, Pitch) _degreeOf(
       Pitch pitch, KeySignature key, int tonicOctave) {
+    final respelled = respellToKey(pitch, key);
     final tonicStep = _tonicStepIndex(key);
-    final digit = (pitch.step.index - tonicStep + 7) % 7 + 1;
-    final deviation = pitch.alter - key.alterFor(pitch.step);
+    final digit = (respelled.step.index - tonicStep + 7) % 7 + 1;
+    final deviation = respelled.alter - key.alterFor(respelled.step);
     final dots =
-        ((pitch.diatonicIndex - (tonicOctave * 7 + tonicStep)) / 7).floor();
-    return (digit, deviation, dots);
+        ((respelled.diatonicIndex - (tonicOctave * 7 + tonicStep)) / 7).floor();
+    return (digit, deviation, dots, respelled);
   }
 
   /// The diatonic step index (C=0…B=6) of [key]'s major tonic.

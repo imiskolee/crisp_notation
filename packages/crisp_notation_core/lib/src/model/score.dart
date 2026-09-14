@@ -301,12 +301,17 @@ class Score {
   /// - `3[c4:e d4 e4]` groups a tuplet: `actual[`…`]` or `actual:normal[`
   ///   (default `normal` = the largest power of two below `actual`, and 3
   ///   for duplets). Tuplets cannot cross barlines or nest.
-  /// - A pitch written without an accidental inherits the key signature's
-  ///   alteration for its step: under a 3-flat key (`!key=-3` or
-  ///   `keySignature: KeySignature(-3)`), `b4` is B♭4 and sounds/renders
-  ///   as such with no accidental drawn. An explicit suffix (`#`, `b`,
-  ///   `n`, `##`, `bb`) always overrides the key signature. A `!key=`
-  ///   directive re-keys the notes that follow it.
+  /// - A pitch written without an accidental is a **white-key natural**
+  ///   (alter 0) — it does NOT inherit the key signature's alteration.
+  ///   Under a 3-flat key (`!key=-3` or `keySignature: KeySignature(-3)`),
+  ///   `b4` is B natural (white key B); to write the key's B♭ use `bb4`.
+  ///   The jianpu engine respells bare letters enharmonically against
+  ///   the key (see `JianpuLayoutEngine.respellToKey`): in C♯ major,
+  ///   `f4` (white key F) respells to E♯ and renders as `3` (not `♭4`).
+  ///   An explicit suffix (`#`, `b`, `n`, `##`, `bb`) always overrides.
+  ///   A `!key=` directive re-keys the notes that follow it (changes
+  ///   the key signature and the respell/accidental display, but not
+  ///   the literal pitch of a bare letter).
   /// - The accidental `n` parses as an explicit natural and forces the
   ///   accidental to be drawn (`showAccidental: true`).
   /// - Every element is auto-assigned the id `e0`, `e1`, … in reading order,
@@ -763,11 +768,17 @@ class Score {
   static final _octavelessPitch = RegExp(r'^[a-gA-G](##|bb|#|b|n)?$');
 
   /// Parses [source] like [Pitch.parse], but a pitch written without an
-  /// accidental suffix inherits [key]'s alteration for its step — the key
-  /// signature is what makes `b4` in E♭ major a B♭. An explicit suffix
-  /// (`#`, `b`, `n`, `##`, `bb`) always wins. A pitch written without an
-  /// octave takes [inheritedOctave] (the running octave of its voice), or 4
-  /// when no pitch came before it.
+  /// accidental suffix is a **white-key natural** (alter 0) — it does NOT
+  /// inherit [key]'s alteration. To write the key's altered note, use an
+  /// explicit suffix: `bb4` for B♭ in F major, `f#4` for F# in C# major. An
+  /// explicit suffix (`#`, `b`, `n`, `##`, `bb`) always wins. A pitch written
+  /// without an octave takes [inheritedOctave] (the running octave of its
+  /// voice), or 4 when no pitch came before it.
+  ///
+  /// The jianpu engine respells bare letters enharmonically against [key]
+  /// (see `JianpuLayoutEngine.respellToKey`): `f` in C# major respells to
+  /// E# and renders as `3`, not `♭4`. [key] is retained as a parameter for
+  /// API compatibility and future key-aware spelling rules.
   static Pitch _parseKeyedPitch(
     String source,
     KeySignature key, [
@@ -777,14 +788,7 @@ class Score {
     if (_octavelessPitch.hasMatch(src)) {
       src = '$src${inheritedOctave ?? 4}';
     }
-    final pitch = Pitch.parse(src);
-    if (RegExp(r'^[a-gA-G](##|bb|#|b|n)').hasMatch(src)) {
-      return pitch;
-    }
-    final implied = key.alterFor(pitch.step);
-    return implied == 0
-        ? pitch
-        : Pitch(pitch.step, alter: implied, octave: pitch.octave);
+    return Pitch.parse(src);
   }
 
   static const Map<String, DurationBase> _durationLetters = {

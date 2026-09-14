@@ -13,12 +13,15 @@ void main() {
 
   const assetKey = 'packages/crisp_notation/assets/smufl/bravura_metadata.json';
   var bundleHits = 0;
+  var fontHits = 0;
+  final fontBytes = File('assets/fonts/Bravura.otf').readAsBytesSync();
 
   setUp(() {
     Bravura.debugReset();
     // rootBundle caches strings across tests; force a real bundle read.
     rootBundle.evict(assetKey);
     bundleHits = 0;
+    fontHits = 0;
     final bytes = File('assets/smufl/bravura_metadata.json').readAsBytesSync();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMessageHandler('flutter/assets', (message) async {
@@ -27,6 +30,10 @@ void main() {
       if (key == assetKey) {
         bundleHits++;
         return ByteData.view(bytes.buffer);
+      }
+      if (key == MusicFont.bravura.fontAsset) {
+        fontHits++;
+        return ByteData.view(fontBytes.buffer);
       }
       return null;
     });
@@ -56,6 +63,7 @@ void main() {
     expect(identical(first, second), isTrue);
     expect(identical(first, third), isTrue);
     expect(bundleHits, 1);
+    expect(fontHits, 1);
   });
 
   test('a failed load is not cached: the next call retries', () async {
@@ -71,6 +79,9 @@ void main() {
         .setMockMessageHandler('flutter/assets', (message) async {
       final key = utf8.decode(message!.buffer
           .asUint8List(message.offsetInBytes, message.lengthInBytes));
+      if (key == MusicFont.bravura.fontAsset) {
+        return ByteData.view(fontBytes.buffer);
+      }
       return key == assetKey ? ByteData.view(bytes.buffer) : null;
     });
     rootBundle.evict(assetKey);
@@ -87,6 +98,7 @@ void main() {
     expect(identical(results[0], results[1]), isTrue);
     expect(identical(results[1], results[2]), isTrue);
     expect(bundleHits, 1);
+    expect(fontHits, 1);
   });
 
   testWidgets('StaffView self-heals: empty first frame, painted after load',

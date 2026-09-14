@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crisp_notation/crisp_notation.dart';
+import 'package:crisp_notation/src/rendering/layout_painter.dart';
 import 'package:flutter/material.dart' hide Step;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,6 +10,36 @@ import 'test_setup.dart';
 
 void main() {
   setUpAll(setUpCrispNotationForTests);
+
+  test('loading music fonts registers package and app glyph families',
+      () async {
+    final reference = LayoutPainter(
+      theme: const CrispNotationTheme(),
+      scale: 16,
+    );
+    addTearDown(reference.dispose);
+    for (final package in [null, 'font_test']) {
+      final font = MusicFont(
+        family: package == null ? 'LoadedAppBravura' : 'LoadedPackageBravura',
+        package: package,
+        metadataAsset: MusicFont.bravura.metadataAsset,
+        fontAsset: MusicFont.bravura.fontAsset,
+      );
+      await MusicFonts.load(font);
+      final painter = LayoutPainter(
+        theme: CrispNotationTheme(musicFont: font),
+        scale: 16,
+      );
+      addTearDown(painter.dispose);
+      for (final glyph in ['gClef', 'noteheadBlack', 'accidentalSharp']) {
+        expect(
+          painter.glyphPainter(glyph, Colors.black, 1).width,
+          closeTo(reference.glyphPainter(glyph, Colors.black, 1).width, 0.01),
+          reason: '$font / $package / $glyph must use the loaded outlines',
+        );
+      }
+    }
+  });
 
   test('MusicFont.bravura is the default and carries its asset info', () {
     expect(MusicFont.bravura.family, 'Bravura');

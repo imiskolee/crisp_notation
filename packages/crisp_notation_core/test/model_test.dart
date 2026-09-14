@@ -89,22 +89,25 @@ void main() {
       expect(elements[2].showAccidental, isTrue);
     });
 
-    test('pitches without an accidental inherit the key signature', () {
-      // E♭ major: B♭, E♭, A♭.
+    test('pitches without an accidental are white-key naturals', () {
+      // E♭ major: B♭, E♭, A♭ are the key's altered notes — but a bare
+      // letter is a white-key natural (alter 0), NOT the key's alteration.
+      // To get the key's B♭ write `bb4`, etc. An explicit suffix always wins.
       final score = Score.simple(
         keySignature: const KeySignature(-3),
         notes: 'b4:q e5 a4 c5 bn4 bb4',
       );
       final elements = score.measures.first.elements.cast<NoteElement>();
-      expect(elements[0].pitches.single, const Pitch(Step.b, alter: -1));
+      expect(elements[0].pitches.single, const Pitch(Step.b));
       expect(
         elements[1].pitches.single,
-        const Pitch(Step.e, alter: -1, octave: 5),
+        const Pitch(Step.e, octave: 5),
       );
-      expect(elements[2].pitches.single, const Pitch(Step.a, alter: -1));
+      expect(elements[2].pitches.single, const Pitch(Step.a));
       // C is unaltered in E♭ major.
       expect(elements[3].pitches.single, const Pitch(Step.c, octave: 5));
-      // An explicit suffix always wins over the key signature.
+      // An explicit suffix always wins: `bn4` is B natural with the
+      // accidental forced; `bb4` is B♭.
       expect(elements[4].pitches.single, const Pitch(Step.b));
       expect(elements[4].showAccidental, isTrue);
       expect(elements[5].pitches.single, const Pitch(Step.b, alter: -1));
@@ -114,25 +117,24 @@ void main() {
       final score = Score.simple(notes: 'f4:q | !key=1 f4 | f4 !key=0 f4');
       NoteElement noteAt(int m, int i) =>
           score.measures[m].elements[i] as NoteElement;
-      // C major: F natural.
+      // A bare `f4` is a white-key F natural regardless of the surrounding
+      // key — `!key=` only changes the key signature (and thus the jianpu
+      // respelling/accidental display), not the literal pitch.
       expect(noteAt(0, 0).pitches.single, const Pitch(Step.f));
-      // G major from the directive on: F♯.
-      expect(noteAt(1, 0).pitches.single, const Pitch(Step.f, alter: 1));
+      expect(noteAt(1, 0).pitches.single, const Pitch(Step.f));
       expect(score.measures[1].keyChange, const KeySignature(1));
-      // The directive takes effect where it stands: the first f keeps G
-      // major's F♯, the second is back to C major's F natural.
-      expect(noteAt(2, 0).pitches.single, const Pitch(Step.f, alter: 1));
+      expect(noteAt(2, 0).pitches.single, const Pitch(Step.f));
       expect(noteAt(2, 1).pitches.single, const Pitch(Step.f));
     });
 
-    test('grace notes inherit the key signature', () {
+    test('grace notes are white-key naturals unless explicit', () {
       final score = Score.simple(
-        keySignature: const KeySignature(-1), // F major: B♭
+        keySignature: const KeySignature(-1), // F major
         notes: '{b4,f#5}c5:q',
       );
       final note = score.measures.first.elements.single as NoteElement;
       expect(note.graceNotes, const [
-        Pitch(Step.b, alter: -1),
+        Pitch(Step.b),
         Pitch(Step.f, alter: 1, octave: 5),
       ]);
     });

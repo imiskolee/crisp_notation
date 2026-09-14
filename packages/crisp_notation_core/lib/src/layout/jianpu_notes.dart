@@ -67,7 +67,8 @@ extension _JianpuNotes on _JianpuBuilder {
     var overhang = 0.0;
     for (var mi = 0; mi < n; mi++) {
       final dev = degrees[mi].$2;
-      final memKey = (sorted[mi].step.index, sorted[mi].octave);
+      final respelled = degrees[mi].$4;
+      final memKey = (respelled.step.index, respelled.octave);
       if (dev == (memory[memKey] ?? 0)) continue;
       memory[memKey] = dev;
       if (element.showAccidental == false) continue;
@@ -132,9 +133,9 @@ extension _JianpuNotes on _JianpuBuilder {
   ) {
     var topCursor = _digitTop;
     final shown = element.pitches.first;
-    final (digit, deviation, octaveDots) =
+    final (digit, deviation, octaveDots, respelled) =
         JianpuLayoutEngine._degreeOf(shown, key, tonicOctave);
-    final memKey = (shown.step.index, shown.octave);
+    final memKey = (respelled.step.index, respelled.octave);
     final remembered = memory[memKey] ?? 0;
     if (deviation != remembered) {
       memory[memKey] = deviation;

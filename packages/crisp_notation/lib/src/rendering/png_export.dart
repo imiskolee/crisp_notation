@@ -165,19 +165,40 @@ Future<Uint8List> renderStaffSystemSystemsToPng(
       .clamp(1, 1 << 20);
   return _rasterize(width, height, background, (canvas, painter) {
     if (titleTop > 0) {
-      _paintTitleBlock(canvas, metadata, staffSpace, leftMargin,
-          wrapped.maxWidth, theme.staffColor, theme.textFontFamily);
+      _paintTitleBlock(
+          canvas,
+          metadata,
+          staffSpace,
+          leftMargin,
+          wrapped.maxWidth,
+          theme.staffColor,
+          theme.textFontFamily,
+          theme.textFontFamilyFallback);
     }
     var y = titleTop * staffSpace;
     for (var i = 0; i < wrapped.systems.length; i++) {
       final system = wrapped.systems[i];
       if (showInstrumentLabels && i == 0 && leftMargin > 0) {
-        _paintInstrumentLabels(canvas, system.layout, y, staffSpace, leftMargin,
-            theme.staffColor, theme.textFontFamily);
+        _paintInstrumentLabels(
+            canvas,
+            system.layout,
+            y,
+            staffSpace,
+            leftMargin,
+            theme.staffColor,
+            theme.textFontFamily,
+            theme.textFontFamilyFallback);
       }
       if (showSystemMeasureNumbers && i > 0) {
-        _paintSystemMeasureNumber(canvas, system, y, staffSpace, leftMargin,
-            theme.staffColor, theme.textFontFamily);
+        _paintSystemMeasureNumber(
+            canvas,
+            system,
+            y,
+            staffSpace,
+            leftMargin,
+            theme.staffColor,
+            theme.textFontFamily,
+            theme.textFontFamilyFallback);
       }
       canvas.save();
       canvas.translate(leftMargin * staffSpace, 0);
@@ -219,6 +240,7 @@ void _paintTitleBlock(
   double maxWidth,
   Color color,
   String? fontFamily,
+  List<String>? fontFamilyFallback,
 ) {
   final titleLines = _metadataLines(metadata.title);
   final composerLines = _metadataLines(metadata.composer);
@@ -233,6 +255,7 @@ void _paintTitleBlock(
       (i == 0 ? 1.55 : 1.05) * staffSpace,
       color,
       fontFamily,
+      fontFamilyFallback,
       align: TextAlign.center,
       fontWeight: i == 0 ? FontWeight.w600 : FontWeight.w400,
     );
@@ -248,6 +271,7 @@ void _paintTitleBlock(
         0.9 * staffSpace,
         color,
         fontFamily,
+        fontFamilyFallback,
         align: TextAlign.right,
       );
       y += 1.05 * staffSpace;
@@ -256,7 +280,7 @@ void _paintTitleBlock(
 }
 
 void _paintText(Canvas canvas, String text, Offset position, double fontSize,
-    Color color, String? fontFamily,
+    Color color, String? fontFamily, List<String>? fontFamilyFallback,
     {TextAlign align = TextAlign.left,
     FontWeight fontWeight = FontWeight.w400}) {
   final painter = TextPainter(
@@ -266,6 +290,7 @@ void _paintText(Canvas canvas, String text, Offset position, double fontSize,
         color: color,
         fontSize: fontSize,
         fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
         fontWeight: fontWeight,
       ),
     ),
@@ -291,6 +316,7 @@ void _paintInstrumentLabels(
   double leftMargin,
   Color color,
   String? fontFamily,
+  List<String>? fontFamilyFallback,
 ) {
   var start = 0;
   while (start < layout.source.staves.length) {
@@ -314,6 +340,7 @@ void _paintInstrumentLabels(
       1.1 * staffSpace,
       color,
       fontFamily,
+      fontFamilyFallback,
       align: TextAlign.right,
     );
     start = end + 1;
@@ -328,6 +355,7 @@ void _paintSystemMeasureNumber(
   double leftMargin,
   Color color,
   String? fontFamily,
+  List<String>? fontFamilyFallback,
 ) {
   final layout = system.layout;
   _paintText(
@@ -338,6 +366,7 @@ void _paintSystemMeasureNumber(
     0.9 * staffSpace,
     color,
     fontFamily,
+    fontFamilyFallback,
   );
 }
 

@@ -15,6 +15,41 @@ int _pngWidth(List<int> b) =>
 void main() {
   setUpAll(setUpCrispNotationForTests);
 
+  for (final field in ['title', 'composer', 'instrument']) {
+    testWidgets('PNG $field honors the text fallback family', (tester) async {
+      final score = Score.simple(notes: 'c4:q d4 e4 f4').copyWith(
+        metadata: ScoreMetadata(
+          title: field == 'title' ? 'Violin' : null,
+          composer: field == 'composer' ? 'Composer' : null,
+          instrument: field == 'instrument' ? 'Violin' : null,
+        ),
+      );
+      final wrapped = layoutStaffSystemSystems(
+        StaffSystem([score]),
+        LayoutSettings(metadata: Bravura.metadataOrNull!),
+        maxWidth: 60,
+      );
+      await tester.runAsync(() async {
+        Future<List<int>> render(CrispNotationTheme theme) =>
+            renderStaffSystemSystemsToPng(
+              wrapped,
+              showTitle: true,
+              showInstrumentLabels: true,
+              leftMargin: 8,
+              theme: theme,
+            );
+        final expected = await render(
+          const CrispNotationTheme(textFontFamily: 'Roboto'),
+        );
+        final fallback = await render(const CrispNotationTheme(
+          textFontFamily: 'packages/crisp_notation/Bravura',
+          textFontFamilyFallback: ['Roboto'],
+        ));
+        expect(fallback, orderedEquals(expected));
+      });
+    });
+  }
+
   testWidgets('renders a notation layout to a valid PNG', (tester) async {
     final layout = const LayoutEngine().layout(
       Score.simple(

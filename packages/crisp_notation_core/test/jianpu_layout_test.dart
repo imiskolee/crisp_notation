@@ -93,20 +93,6 @@ void main() {
       expect(texts, contains('G'));
     });
 
-    test('F major: written B natural is a raised 4, B flat a plain 4', () {
-      // Bare `b4` inherits the key's B♭ (plain 4); a written B natural
-      // needs the explicit `n` and becomes a raised 4 (♯ prefix).
-      final layout = jianpuOf(Score.simple(
-        notes: 'bn4:q b4:q',
-        keySignature: const KeySignature(-1),
-      ));
-      final glyphs =
-          layout.primitives.whereType<GlyphPrimitive>().map((g) => g.smuflName);
-      expect(glyphs,
-          contains(SmuflGlyph.accidentalSharp)); // prefix before the first 4
-      expect(digitsOf(layout).map((d) => d.text), ['4', '4']);
-    });
-
     test('an accidental deviating from the key gets a prefix', () {
       final layout = jianpuOf(Score.simple(notes: 'f#4:q'));
       final glyphs =
@@ -973,6 +959,47 @@ void main() {
       }
     });
 
+    test('melisma extender: line runs under following syllable-less notes',
+        () {
+      // 延音线：从「啦」右缘延伸，穿过无词的 tie 续音与后续音符，
+      // 到下一个带词音符（「咪」）前停止。
+      final layout = jianpuOf(Score.simple(
+        notes: 'c4:q~ c4:q d4:q e4:q',
+        timeSignature: TimeSignature.commonTime,
+        lyrics: 'la_ * * mi',
+      ));
+      final la = layout.primitives
+          .whereType<TextPrimitive>()
+          .singleWhere((t) => t.text == 'la');
+      final mi = layout.primitives
+          .whereType<TextPrimitive>()
+          .singleWhere((t) => t.text == 'mi');
+      final extender = layout.primitives
+          .whereType<LinePrimitive>()
+          .where((l) =>
+              l.from.y == l.to.y &&
+              l.from.y == la.position.y &&
+              l.from.x > la.position.x)
+          .toList();
+      expect(extender, hasLength(1));
+      expect(extender.single.to.x, lessThan(mi.position.x));
+    });
+
+    test('no extender when the next note carries a syllable', () {
+      final layout = jianpuOf(Score.simple(
+        notes: 'c4:q d4:q',
+        timeSignature: TimeSignature.commonTime,
+        lyrics: 'la_ mi',
+      ));
+      final la = layout.primitives
+          .whereType<TextPrimitive>()
+          .singleWhere((t) => t.text == 'la');
+      final extender = layout.primitives
+          .whereType<LinePrimitive>()
+          .where((l) => l.from.y == l.to.y && l.from.y == la.position.y);
+      expect(extender, isEmpty);
+    });
+
     // GB/T 46845-2025 §6.7.3: 力度记号的位置：器乐谱记在乐谱下方，
     // 声乐谱记在乐谱上方。
     test('instrumental score: dynamics go below the staff (6.7.3)', () {
@@ -1150,6 +1177,69 @@ void main() {
 
     test('no prefix when pitch matches key and no prior alteration', () {
       final layout = jianpuOf(Score.simple(notes: 'c4:q d4 e4'));
+      expect(prefixesOf(layout), isEmpty);
+    });
+
+    test('F major: bare b is B natural (♯4), bb is B♭ (plain 4)', () {
+      // A bare `b4` is a white-key B natural — NOT the key's B♭. It
+      // renders as a raised 4 (♯ prefix). `bb4` is the key's B♭ (plain 4,
+      // no prefix). The deviation change from B♭ (dev 0) to B natural
+      // (dev +1) is what draws the ♯ on the second note.
+      final layout = jianpuOf(Score.simple(
+        notes: 'bb4:q b4:q',
+        keySignature: const KeySignature(-1),
+      ));
+      expect(digitsOf(layout).map((d) => d.text), ['4', '4']);
+      final prefixes = prefixesOf(layout);
+      expect(prefixes.where((g) => g == SmuflGlyph.accidentalSharp).length,
+          greaterThanOrEqualTo(1));
+    });
+
+    test('C♯ major: bare f respells to E♯ and renders as 3', () {
+      // C♯ major (7 sharps): 1=C♯ 2=D♯ 3=E♯(=F) 4=F♯ 5=G♯ 6=A♯ 7=B♯(=C).
+      // A bare `f4` is the white key F = E♯ = scale degree 3 — the respell
+      // makes it render as `3` with no prefix, instead of the literal `♭4`
+      // the letter F would otherwise produce.
+      const key = KeySignature(7);
+      final layout = jianpuOf(Score.simple(notes: 'f4:q', keySignature: key));
+      expect(digitsOf(layout).single.text, '3');
+      expect(prefixesOf(layout), isEmpty);
+    });
+
+    test('C♯ major: explicit f# stays as 4 (chromatic alteration kept)', () {
+      // An explicit `f#4` is the key's F♯ = scale degree 4 — alter != 0,
+      // so respellToKey leaves it alone and it renders as `4` plain.
+      const key = KeySignature(7);
+      final layout = jianpuOf(Score.simple(notes: 'f#4:q', keySignature: key));
+      expect(digitsOf(layout).single.text, '4');
+      expect(prefixesOf(layout), isEmpty);
+    });
+
+    test('C♯ major: explicit e# renders as 3 (key natural)', () {
+      const key = KeySignature(7);
+      final layout = jianpuOf(Score.simple(notes: 'e#4:q', keySignature: key));
+      expect(digitsOf(layout).single.text, '3');
+      expect(prefixesOf(layout), isEmpty);
+    });
+
+    test('C♯ major: bare e is a lowered 3 (♭ prefix, no respell)', () {
+      // Bare `e4` is white-key E (MIDI 64), a semitone below the key's E♯
+      // (MIDI 65) — no key-natural enharmonic exists, so it stays as E
+      // and renders as `♭3`.
+      const key = KeySignature(7);
+      final layout = jianpuOf(Score.simple(notes: 'e4:q', keySignature: key));
+      expect(digitsOf(layout).single.text, '3');
+      expect(prefixesOf(layout), contains(SmuflGlyph.accidentalFlat));
+    });
+
+    test('C♯ major: bare c respells to B♯3 and renders as 7', () {
+      // C4 (MIDI 60) = B♯3 in C♯ major — the key's 7th, an octave below
+      // middle C♯4 (the tonic `1`). The respell makes it render as `7`
+      // (with a low-octave dot), instead of the literal `♭1` the letter C
+      // would otherwise produce.
+      const key = KeySignature(7);
+      final layout = jianpuOf(Score.simple(notes: 'c4:q', keySignature: key));
+      expect(digitsOf(layout).single.text, '7');
       expect(prefixesOf(layout), isEmpty);
     });
   });

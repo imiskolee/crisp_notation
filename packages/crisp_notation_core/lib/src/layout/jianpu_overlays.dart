@@ -141,6 +141,9 @@ extension _JianpuOverlays on _JianpuBuilder {
     for (var row = 0; row < verses.length; row++) {
       final lyrics = byVerse[verses[row]]!;
       final baselineY = firstBaseline + row * lineHeight;
+      // Ids carrying a syllable in this verse — a melisma extender runs
+      // below the following notes that carry none.
+      final lyricIds = {for (final l in lyrics) l.elementId};
 
       final centers = <double>[];
       final halfWidths = <double>[];
@@ -154,10 +157,36 @@ extension _JianpuOverlays on _JianpuBuilder {
       }
       _spreadRight(centers, halfWidths, 0.8 * size);
 
+      final notesInOrder = [
+        for (final measure in score.measures)
+          ...measure.elements.whereType<NoteElement>(),
+      ];
+
       for (var j = 0; j < valid.length; j++) {
         final lyric = lyrics[valid[j]];
         primitives.add(TextPrimitive(lyric.text, Point(centers[j], baselineY),
             size: size));
+
+        if (lyric.extender) {
+          // Extender: from the syllable's right edge along the baseline,
+          // under the following notes that carry no syllable of their own.
+          final startIndex =
+              notesInOrder.indexWhere((n) => n.id == lyric.elementId);
+          double? endX;
+          if (startIndex >= 0) {
+            for (var k = startIndex + 1; k < notesInOrder.length; k++) {
+              final id = notesInOrder[k].id;
+              if (id != null && lyricIds.contains(id)) break;
+              endX = anchorX[id];
+            }
+          }
+          final startX = centers[j] + halfWidths[j] + 0.15;
+          if (endX != null && endX > startX + 0.2) {
+            primitives.add(LinePrimitive(
+                Point(startX, baselineY), Point(endX, baselineY),
+                thickness: 0.1));
+          }
+        }
       }
     }
   }
