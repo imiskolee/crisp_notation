@@ -1,4 +1,4 @@
-/// SVG export: renders a laid-out [ScoreLayout] to a standalone SVG document.
+﻿/// SVG export: renders a laid-out [ScoreLayout] to a standalone SVG document.
 ///
 /// Pure Dart and dependency-free — it turns the layout's display list
 /// (glyphs, lines, curves, beams, text) into SVG shapes, so the same emitter
@@ -61,6 +61,48 @@ String scoreToSvg(
   _emitStaff(b, layout, staffSpace, -layout.top * staffSpace, color,
       glyphFontFamily, textFontFamily, elementColors);
 
+  b.writeln('</svg>');
+  return b.toString();
+}
+
+/// Serializes a line-broken [MultiSystemLayout] (from `layoutSystems`) to one
+/// SVG document, systems stacked [systemGap] staff spaces apart - the
+/// single-staff counterpart of [staffSystemSystemsToSvg].
+///
+/// Passing non-null [metadata] causes an engraved title/composer block to
+/// render above the first system (same shape as [staffSystemSystemsToSvg]'s
+/// showTitle block).
+String systemsToSvg(
+  MultiSystemLayout wrapped, {
+  double staffSpace = 12,
+  double systemGap = 8,
+  ScoreMetadata? metadata,
+  String glyphFontFamily = 'Bravura',
+  String textFontFamily = _defaultTextFontFamily,
+  String color = '#000000',
+  String background = '#ffffff',
+  String? fontFaceDataUri,
+  Map<String, String> elementColors = const {},
+}) {
+  final titleTop = metadata != null ? _titleBlockHeight(metadata) : 0.0;
+  final widthPx = wrapped.maxWidth * staffSpace;
+  final heightPx = (titleTop +
+          (wrapped.systems.isEmpty
+              ? 4.0
+              : wrapped.heightWith(systemGap))) *
+      staffSpace;
+  final b = StringBuffer();
+  _svgOpen(b, widthPx, heightPx, glyphFontFamily, background, fontFaceDataUri);
+  if (titleTop > 0) {
+    _emitTitleBlock(b, metadata!, staffSpace, 0, wrapped.maxWidth, color,
+        textFontFamily);
+  }
+  var y = titleTop * staffSpace;
+  for (final system in wrapped.systems) {
+    _emitStaff(b, system.layout, staffSpace, y - system.layout.top * staffSpace,
+        color, glyphFontFamily, textFontFamily, elementColors);
+    y += (system.layout.height + systemGap) * staffSpace;
+  }
   b.writeln('</svg>');
   return b.toString();
 }

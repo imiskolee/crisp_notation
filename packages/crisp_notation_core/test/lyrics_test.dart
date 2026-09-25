@@ -229,22 +229,31 @@ void main() {
       expect(extenders, isEmpty);
     });
 
-    test('unknown element id throws', () {
+    test('unknown element id is skipped gracefully', () {
+      // v0.7.5: layout skips lyrics whose elementId doesn't map to a note
+      // instead of throwing — an orphan syllable should not kill the whole
+      // layout. The rest of the score still lays out cleanly.
       final score = Score(
         clef: Clef.treble,
         measures: Score.simple(notes: 'c4:q').measures,
         lyrics: const [Lyric('nope', 'la')],
       );
-      expect(() => layoutOf(score), throwsArgumentError);
+      final layout = layoutOf(score); // should not throw
+      // The "nope" lyric produced 0 text primitives (no anchor),
+      // but the note itself is still rendered.
+      expect(textsOf(layout), isEmpty);
     });
 
-    test('a lyric on a rest id throws', () {
+    test('a lyric on a rest id is skipped gracefully', () {
+      // Same robustness as above: a lyric pointing at a rest element id is
+      // silently dropped rather than aborting the layout.
       final score = Score(
         clef: Clef.treble,
         measures: Score.simple(notes: 'c4:q r').measures,
         lyrics: const [Lyric('e1', 'la')],
       );
-      expect(() => layoutOf(score), throwsArgumentError);
+      final layout = layoutOf(score); // should not throw
+      expect(textsOf(layout), isEmpty);
     });
 
     test('deterministic with lyrics', () {

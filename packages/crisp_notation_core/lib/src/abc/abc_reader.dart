@@ -1108,7 +1108,7 @@ class _AbcBody {
   void _readRest() {
     _pos++;
     final dur = _applyPending(_readDuration());
-    _add(_Rec(null, dur, '$_idPfx${_id++}'));
+    _add(_makeRec(null, dur));
   }
 
   void _readChord() {
@@ -1137,7 +1137,7 @@ class _AbcBody {
     _add(_makeRec([pitch], dur));
   }
 
-  _Rec _makeRec(List<Pitch> pitches, Fraction dur) {
+  _Rec _makeRec(List<Pitch>? pitches, Fraction dur) {
     final rec = _Rec(
       pitches,
       dur,
@@ -1513,42 +1513,35 @@ List<Measure> _mergeDecorations(
 
 List<Lyric> _alignLyrics(List<String> lines, List<String> noteOrder) {
   if (lines.isEmpty) return const [];
-  // Flatten every w: line into a stream of syllable tokens.
-  final tokens = <String>[];
-  for (final line in lines) {
-    for (final t in _splitSyllables(line)) {
-      tokens.add(t);
-    }
-  }
   final lyrics = <Lyric>[];
-  var ti = 0;
-  for (final id in noteOrder) {
-    if (ti >= tokens.length) break;
-    if (id == '|') {
-      // Advance syllables to the next '|' only if the token stream uses them.
-      while (ti < tokens.length && tokens[ti] == '|') {
-        ti++;
+  for (var verseIndex = 0; verseIndex < lines.length; verseIndex++) {
+    final tokens = _splitSyllables(lines[verseIndex]).toList();
+    var ti = 0;
+    for (final id in noteOrder) {
+      if (ti >= tokens.length) break;
+      if (id == '|') {
+        while (ti < tokens.length && tokens[ti] == '|') {
+          ti++;
+        }
+        continue;
       }
-      continue;
-    }
-    var tok = tokens[ti];
-    while (tok == '|' && ti + 1 < tokens.length) {
+      var tok = tokens[ti];
+      while (tok == '|' && ti + 1 < tokens.length) {
+        ti++;
+        tok = tokens[ti];
+      }
       ti++;
-      tok = tokens[ti];
+      if (tok == '*' || tok == '|' || tok.isEmpty) continue;
+      var slashes = 0;
+      for (var k = tok.length - 2; k >= 0 && tok[k] == r'\'; k--) {
+        slashes++;
+      }
+      final hyphen = tok.endsWith('-') && slashes.isEven;
+      final text =
+          _unescapeSyllable(hyphen ? tok.substring(0, tok.length - 1) : tok);
+      if (text.isEmpty) continue;
+      lyrics.add(Lyric(id, text, hyphenToNext: hyphen, verse: verseIndex + 1));
     }
-    ti++;
-    if (tok == '*' || tok == '|' || tok.isEmpty) continue; // skip this note
-    // A trailing `-` is the syllable-break marker only when it is not itself
-    // escaped — an odd number of backslashes before it means it is literal.
-    var slashes = 0;
-    for (var k = tok.length - 2; k >= 0 && tok[k] == r'\'; k--) {
-      slashes++;
-    }
-    final hyphen = tok.endsWith('-') && slashes.isEven;
-    final text =
-        _unescapeSyllable(hyphen ? tok.substring(0, tok.length - 1) : tok);
-    if (text.isEmpty) continue;
-    lyrics.add(Lyric(id, text, hyphenToNext: hyphen));
   }
   return lyrics;
 }

@@ -122,6 +122,41 @@ extension _JianpuOverlays on _JianpuBuilder {
       primitives.add(TextPrimitive(annotation.text, Point(at, 0.5),
           size: s.annotationSize));
     }
+    final size = s.annotationSize;
+    var baseline = 0.5;
+    for (final primitive in primitives) {
+      if (primitive is TextPrimitive) {
+        baseline = min(baseline,
+            primitive.position.y - primitive.size * 0.8 - s.annotationGap - size * 0.25);
+      } else if (primitive is CurvePrimitive) {
+        baseline = min(baseline,
+            min(primitive.control1.y, primitive.control2.y) - s.annotationGap - size * 0.25);
+      }
+    }
+    final symbols = [...score.chordSymbols]
+      ..sort((a, b) => (anchorX[a.elementId] ?? 0).compareTo(anchorX[b.elementId] ?? 0));
+    final centers = <double>[];
+    final halves = <double>[];
+    final valid = <ChordSymbol>[];
+    for (final symbol in symbols) {
+      final at = anchorX[symbol.elementId];
+      if (at == null) continue;
+      centers.add(at);
+      halves.add(_estTextHalfWidth(symbol.text, size));
+      valid.add(symbol);
+    }
+    final rowEnds = <double>[];
+    for (var i = 0; i < valid.length; i++) {
+      var row = 0;
+      while (row < rowEnds.length && centers[i] - halves[i] < rowEnds[row] + 0.4 * size) {
+        row++;
+      }
+      if (row == rowEnds.length) rowEnds.add(0);
+      rowEnds[row] = centers[i] + halves[i];
+      primitives.add(TextPrimitive(valid[i].text, Point(centers[i], baseline - row * size * 1.5),
+          size: size, elementId: valid[i].elementId));
+      x = max(x, centers[i] + halves[i] + 0.3);
+    }
   }
 
   /// Draws lyrics: syllables grouped into verses, stacked below the digit row,

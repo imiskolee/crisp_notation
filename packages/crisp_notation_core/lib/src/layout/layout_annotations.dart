@@ -155,24 +155,25 @@ extension _Annotations on _LayoutBuilder {
       // push each right of the previous by its width + a word gap. Hyphens and
       // extenders below use the adjusted centers, so they stay aligned.
       final centers = <double>[];
-      for (final lyric in lyrics) {
-        final index = infoIndexOf[lyric.elementId];
+      final halfWidths = <double>[];
+      final valid = <int>[]; // indices into `lyrics` that have a note anchor
+      for (var i = 0; i < lyrics.length; i++) {
+        final index = infoIndexOf[lyrics[i].elementId];
         if (index == null || _tieInfos[index].note == null) {
           continue;
         }
         final info = _tieInfos[index];
         centers.add((info.left + info.right) / 2);
+        halfWidths.add(halfWidthOf(lyrics[i].text));
+        valid.add(i);
       }
-      _spreadRight(
-        centers,
-        [for (final l in lyrics) halfWidthOf(l.text)],
-        0.4 * size,
-      );
+      _spreadRight(centers, halfWidths, 0.4 * size);
 
-      for (var i = 0; i < lyrics.length; i++) {
+      for (var j = 0; j < valid.length; j++) {
+        final i = valid[j];
         final lyric = lyrics[i];
-        final centerX = centers[i];
-        final halfWidth = halfWidthOf(lyric.text);
+        final centerX = centers[j];
+        final halfWidth = halfWidths[j];
         _primitives.add(TextPrimitive(
           lyric.text,
           Point(centerX, baselineY),
@@ -187,11 +188,13 @@ extension _Annotations on _LayoutBuilder {
           baselineY + 0.25 * size,
         );
 
-        if (lyric.hyphenToNext && i + 1 < lyrics.length) {
+        if (lyric.hyphenToNext && j + 1 < valid.length && valid[j + 1] == i + 1) {
           // Dash centered between this syllable's end and the next one's
           // start, on the x-height line.
+          final nextCenterX = centers[j + 1];
+          final nextHalf = halfWidths[j + 1];
           final gapStart = centerX + halfWidth;
-          final gapEnd = centers[i + 1] - halfWidthOf(lyrics[i + 1].text);
+          final gapEnd = nextCenterX - nextHalf;
           if (gapEnd > gapStart + 0.2) {
             final mid = (gapStart + gapEnd) / 2;
             final dashHalf = min(0.3, (gapEnd - gapStart) / 4);
@@ -205,12 +208,14 @@ extension _Annotations on _LayoutBuilder {
         }
 
         if (lyric.elidesToNext &&
-            i + 1 < lyrics.length &&
-            lyrics[i + 1].elementId == lyric.elementId) {
+            j + 1 < valid.length &&
+            lyrics[valid[j + 1]].elementId == lyric.elementId) {
           // Elision (synalepha): an undertie (‿) below the two syllables sung
           // on the one note, bridging this syllable's end to the next's start.
+          final nextCenterX = centers[j + 1];
+          final nextHalf = halfWidths[j + 1];
           final x1 = centerX + halfWidth * 0.6;
-          final x2 = centers[i + 1] - halfWidthOf(lyrics[i + 1].text) * 0.6;
+          final x2 = nextCenterX - nextHalf * 0.6;
           if (x2 > x1 + 0.1) {
             final y = baselineY + 0.12 * size;
             final dip = y + 0.18 * size;
@@ -229,8 +234,8 @@ extension _Annotations on _LayoutBuilder {
           // notes that carry no syllable of their own in this verse.
           final startIndex = infoIndexOf[lyric.elementId]!;
           double? endX;
-          for (var j = startIndex + 1; j < _tieInfos.length; j++) {
-            final info = _tieInfos[j];
+          for (var k = startIndex + 1; k < _tieInfos.length; k++) {
+            final info = _tieInfos[k];
             if (info.voice != 0 || info.note == null) continue;
             if (info.id != null && lyricIds.contains(info.id)) break;
             endX = info.right;
@@ -279,7 +284,7 @@ extension _Annotations on _LayoutBuilder {
           <(String, String, double, double)>[]; // id, text, ctr, half
       for (final (id, text) in items) {
         final info = infoOf[id];
-        if (info == null || info.note == null) {
+        if (info == null || (info.note == null && !score.chordSymbols.any((symbol) => symbol.elementId == id))) {
           throw ArgumentError(
               'annotation/chord symbol references an unknown note id: $id');
         }

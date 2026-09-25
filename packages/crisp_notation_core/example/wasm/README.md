@@ -39,15 +39,20 @@ crisp_notationInfo(notes)                                   // -> String summary
 
 where `notes` is a `Score.simple` DSL string (e.g. `"c4:q d4 e4 f4 | g4:h a4"`).
 
+Studio integration uses `score_bridge.dart` instead, which exposes an
+ABC-only renderer (`abcToSvg`) and an ABC → Studio interchange parser
+(`abcToStudioNotes`).
+
 ## Files
 
 | File | Purpose |
 |---|---|
 | `wasm_smoke.dart` | Asset-free `main()` exercising every codec; runs on the VM *and* as WASM |
-| `main.dart` | Browser entry: `dart:js_interop` exports to JavaScript |
+| `main.dart` | Browser entry: `dart:js_interop` exports `crisp_notationConvert` / `crisp_notationInfo` |
+| `score_bridge.dart` | Studio bridge: `dart:js_interop` exports `abcToSvg` / `abcToStudioNotes` |
 | `run_node.mjs` | Node runner for the smoke module |
 | `index.html` | In-browser conversion demo |
-| `build.sh` | Compiles both entry points |
+| `build.sh` | Compiles all entry points |
 
 ## Scope notes
 

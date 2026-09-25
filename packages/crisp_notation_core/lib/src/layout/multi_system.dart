@@ -10,6 +10,7 @@ import '../theory/clef.dart';
 import '../theory/key_signature.dart';
 import '../theory/time_signature.dart';
 import 'grand_staff.dart';
+import 'jianpu_layout.dart';
 import 'layout_engine.dart';
 import 'layout_settings.dart';
 import 'score_layout.dart';
@@ -160,7 +161,33 @@ MultiSystemLayout layoutSystems(
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
   Map<String, List<int>> extraFingerings = const {},
 }) {
-  const engine = LayoutEngine();
+  // Pick engine by score.staffType so wrapped jianpu uses the jianpu engine.
+  final isJianpu = score.staffType == StaffType.jianpu;
+  const staffEngine = LayoutEngine();
+  const jianpuEngine = JianpuLayoutEngine();
+  ScoreLayout layoutScore(Score s, LayoutSettings settings,
+      {required bool drawTimeSignature, required bool finalBarline}) {
+    return isJianpu
+        ? jianpuEngine.layout(s, settings,
+            drawTimeSignature: drawTimeSignature, finalBarline: finalBarline)
+        : staffEngine.layout(s, settings,
+            drawTimeSignature: drawTimeSignature, finalBarline: finalBarline);
+  }
+  ScoreLayout layoutStretch(Score s, LayoutSettings settings,
+      {double spacingStretch = 1.0,
+      required bool drawTimeSignature,
+      required bool finalBarline}) {
+    return isJianpu
+        ? jianpuEngine.layout(s, settings,
+            spacingStretch: spacingStretch,
+            drawTimeSignature: drawTimeSignature,
+            finalBarline: finalBarline)
+        : staffEngine.layout(s, settings,
+            spacingStretch: spacingStretch,
+            drawTimeSignature: drawTimeSignature,
+            finalBarline: finalBarline);
+  }
+
   if (maxWidth <= 0) {
     throw ArgumentError.value(maxWidth, 'maxWidth', 'must be positive');
   }
@@ -173,7 +200,7 @@ MultiSystemLayout layoutSystems(
 
   // Natural widths of every measure, plus the running clef/key/time state
   // at each measure start.
-  final natural = engine.layout(score, settings);
+  final natural = layoutScore(score, settings, drawTimeSignature: false, finalBarline: true);
   final measureCount = score.measures.length;
   final (clefAt, keyAt, timeAt) = _stateArrays(score);
 
@@ -186,10 +213,11 @@ MultiSystemLayout layoutSystems(
   // The system's leading segment (clef/key/time restatement) is re-laid
   // per system; measure a one-measure probe for its exact width.
   double leadingWidthFor(int firstMeasure) {
-    final probe = engine.layout(
+    final probe = layoutScore(
       _slice(score, firstMeasure, firstMeasure, clefAt, keyAt, timeAt),
       settings,
       drawTimeSignature: drawTimeFor(firstMeasure),
+      finalBarline: true,
     );
     return probe.measureRegions.first.startX;
   }
@@ -216,35 +244,26 @@ MultiSystemLayout layoutSystems(
     }
     final drawTime = drawTimeFor(start);
     var slice = _slice(score, start, end, clefAt, keyAt, timeAt);
-    var layout = engine.layout(slice, settings,
+    var layout = layoutScore(slice, settings,
         drawTimeSignature: drawTime,
-        finalBarline: end == measureCount - 1,
-        showNoteNames: showNoteNames,
-        showNoteOctaves: showNoteOctaves,
-        noteNameStyle: noteNameStyle,
-        extraFingerings: extraFingerings);
+        finalBarline: end == measureCount - 1);
     // Safety trim: if the estimate was ever optimistic, push measures to
     // the next system rather than overflow.
     while (layout.width > maxWidth && end > start) {
       end--;
       slice = _slice(score, start, end, clefAt, keyAt, timeAt);
-      layout = engine.layout(slice, settings,
-          drawTimeSignature: drawTime,
-          finalBarline: end == measureCount - 1,
-          showNoteNames: showNoteNames,
-          showNoteOctaves: showNoteOctaves,
-          noteNameStyle: noteNameStyle,
-          extraFingerings: extraFingerings);
+      layout = layoutScore(slice, settings,
+        drawTimeSignature: drawTime,
+        finalBarline: end == measureCount - 1);
     }
     final isLastSystem = end == measureCount - 1;
     if (justify && !isLastSystem && layout.width < maxWidth) {
       // Stretch the uniform spacing to hit maxWidth.
       layout = _stretchToFit<ScoreLayout>(
-        render: (stretch) => engine.layout(slice, settings,
+        render: (stretch) => layoutStretch(slice, settings,
             spacingStretch: stretch,
             drawTimeSignature: drawTime,
-            finalBarline: false,
-            extraFingerings: extraFingerings),
+            finalBarline: false),
         widthOf: (l) => l.width,
         initial: layout,
         maxWidth: maxWidth,

@@ -15,7 +15,14 @@ class LayoutPainter {
   CrispNotationTheme theme;
 
   /// Pixels per staff space.
-  double scale;
+  double get scale => _scale;
+  double _scale;
+
+  set scale(double value) {
+    if (_scale == value) return;
+    _scale = value;
+    clearCache();
+  }
 
   /// Ids painted in the theme's highlight color.
   Set<String> highlightedIds;
@@ -37,11 +44,11 @@ class LayoutPainter {
   /// Creates a painter.
   LayoutPainter({
     required this.theme,
-    required this.scale,
+    required double scale,
     this.highlightedIds = const {},
     this.elementColors = const {},
     this.suppressIds = const {},
-  });
+  }) : _scale = scale;
 
   /// The effective color of an element's ink.
   Color colorFor(String? elementId) {
