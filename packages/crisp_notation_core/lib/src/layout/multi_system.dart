@@ -160,23 +160,32 @@ MultiSystemLayout layoutSystems(
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
   Map<String, List<int>> extraFingerings = const {},
+  bool showMeasureNumbers = false,
+  int measureNumberInterval = 1,
 }) {
   // Pick engine by score.staffType so wrapped jianpu uses the jianpu engine.
   final isJianpu = score.staffType == StaffType.jianpu;
   const staffEngine = LayoutEngine();
   const jianpuEngine = JianpuLayoutEngine();
   ScoreLayout layoutScore(Score s, LayoutSettings settings,
-      {required bool drawTimeSignature, required bool finalBarline}) {
+      {required bool drawTimeSignature,
+      required bool finalBarline,
+      int measureNumberOffset = 0}) {
     return isJianpu
         ? jianpuEngine.layout(s, settings,
             drawTimeSignature: drawTimeSignature, finalBarline: finalBarline)
         : staffEngine.layout(s, settings,
-            drawTimeSignature: drawTimeSignature, finalBarline: finalBarline);
+            drawTimeSignature: drawTimeSignature,
+            finalBarline: finalBarline,
+            showMeasureNumbers: showMeasureNumbers,
+            measureNumberInterval: measureNumberInterval,
+            measureNumberOffset: measureNumberOffset);
   }
   ScoreLayout layoutStretch(Score s, LayoutSettings settings,
       {double spacingStretch = 1.0,
       required bool drawTimeSignature,
-      required bool finalBarline}) {
+      required bool finalBarline,
+      int measureNumberOffset = 0}) {
     return isJianpu
         ? jianpuEngine.layout(s, settings,
             spacingStretch: spacingStretch,
@@ -185,7 +194,10 @@ MultiSystemLayout layoutSystems(
         : staffEngine.layout(s, settings,
             spacingStretch: spacingStretch,
             drawTimeSignature: drawTimeSignature,
-            finalBarline: finalBarline);
+            finalBarline: finalBarline,
+            showMeasureNumbers: showMeasureNumbers,
+            measureNumberInterval: measureNumberInterval,
+            measureNumberOffset: measureNumberOffset);
   }
 
   if (maxWidth <= 0) {
@@ -243,10 +255,14 @@ MultiSystemLayout layoutSystems(
       end++;
     }
     final drawTime = drawTimeFor(start);
+    // The slice starts at the score's measure [start]: re-anchor the bar
+    // numbering in the full score (pickup-aware).
+    final barOffset = _countedBarsBefore(score, start);
     var slice = _slice(score, start, end, clefAt, keyAt, timeAt);
     var layout = layoutScore(slice, settings,
         drawTimeSignature: drawTime,
-        finalBarline: end == measureCount - 1);
+        finalBarline: end == measureCount - 1,
+        measureNumberOffset: barOffset);
     // Safety trim: if the estimate was ever optimistic, push measures to
     // the next system rather than overflow.
     while (layout.width > maxWidth && end > start) {
@@ -254,7 +270,8 @@ MultiSystemLayout layoutSystems(
       slice = _slice(score, start, end, clefAt, keyAt, timeAt);
       layout = layoutScore(slice, settings,
         drawTimeSignature: drawTime,
-        finalBarline: end == measureCount - 1);
+        finalBarline: end == measureCount - 1,
+        measureNumberOffset: barOffset);
     }
     final isLastSystem = end == measureCount - 1;
     if (justify && !isLastSystem && layout.width < maxWidth) {
@@ -263,7 +280,8 @@ MultiSystemLayout layoutSystems(
         render: (stretch) => layoutStretch(slice, settings,
             spacingStretch: stretch,
             drawTimeSignature: drawTime,
-            finalBarline: false),
+            finalBarline: false,
+            measureNumberOffset: barOffset),
         widthOf: (l) => l.width,
         initial: layout,
         maxWidth: maxWidth,
@@ -493,6 +511,8 @@ StaffSystemSystems layoutStaffSystemSystems(
   bool showNoteNames = false,
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
+  bool showMeasureNumbers = false,
+  int measureNumberInterval = 1,
 }) {
   if (layoutMode == SystemLayoutMode.singleLine ||
       layoutMode == SystemLayoutMode.singleSystem) {
@@ -508,6 +528,8 @@ StaffSystemSystems layoutStaffSystemSystems(
       showNoteNames: showNoteNames,
       showNoteOctaves: showNoteOctaves,
       noteNameStyle: noteNameStyle,
+      showMeasureNumbers: showMeasureNumbers,
+      measureNumberInterval: measureNumberInterval,
     );
     return StaffSystemSystems(
       systems: [
@@ -636,6 +658,11 @@ StaffSystemSystems layoutStaffSystemSystems(
             showNoteNames: showNoteNames,
             showNoteOctaves: showNoteOctaves,
             noteNameStyle: noteNameStyle,
+            showMeasureNumbers: showMeasureNumbers,
+            measureNumberInterval: measureNumberInterval,
+            // The slice starts at the document's measure [start]: re-anchor
+            // the bar numbering in the full document (pickup-aware).
+            measureNumberOffset: _countedBarsBefore(parts.first, start),
           );
       layout = render(1.0);
       if (justify && !isLast && end > start && layout.width < maxWidth) {
@@ -654,6 +681,17 @@ StaffSystemSystems layoutStaffSystemSystems(
     start = end + 1;
   }
   return StaffSystemSystems(systems: systems, maxWidth: maxWidth);
+}
+
+/// The count of counted (non-pickup) bars before measure [index] in [part] —
+/// the document bar number of a slice starting at [index] minus 1, so adding
+/// it to a slice-local bar number re-anchors the numbering in the document.
+int _countedBarsBefore(Score part, int index) {
+  var counted = 0;
+  for (var i = 0; i < index && i < part.measures.length; i++) {
+    if (!part.measures[i].pickup) counted++;
+  }
+  return counted;
 }
 
 /// Whether [part] is silent across measures [start]..[end]: every voice-1 and

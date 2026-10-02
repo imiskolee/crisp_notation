@@ -18,6 +18,12 @@
 /// [staffSystemFromAbc] (one aligned system); [scoreFromAbc] takes the first
 /// voice. `Q:`/`P:` and unmodeled decorations are skipped so real tunes still
 /// import. PLAN.md tracks the full ABC coverage toward abcjs parity.
+///
+/// Clefs: a voice keeps its explicit clef (`V:… clef=…`, `K:… clef=…` or a
+/// mid-tune `[K:… clef=…]`). A voice with NO clef anywhere gets one inferred
+/// from its pitch layout — treble or bass, whichever draws fewer ledger
+/// lines — so an unannotated low part reads in bass instead of drowning in
+/// leger lines below the treble staff.
 library;
 
 import '../layout/multi_part.dart';
@@ -130,6 +136,7 @@ Score _padToBars(Score score, int bars, int voiceIndex) {
   ];
   return Score(
     clef: score.clef,
+    staffType: score.staffType,
     keySignature: score.keySignature,
     timeSignature: score.timeSignature,
     measures: measures,
@@ -138,6 +145,7 @@ Score _padToBars(Score score, int bars, int voiceIndex) {
     slurs: score.slurs,
     dynamics: score.dynamics,
     lyrics: score.lyrics,
+    metadata: score.metadata,
   );
 }
 
@@ -149,6 +157,11 @@ class _Tune {
   final Fraction unit;
   final KeySignature key;
   final Clef headerClef;
+
+  /// Whether the `K:` header carried an explicit clef (`K:C clef=bass`). An
+  /// explicit clef — header or per-voice — is never second-guessed; only a
+  /// voice with NO clef anywhere gets one inferred from its pitch layout.
+  final bool headerClefExplicit;
 
   /// Header `Q:` tempo, rendered above the first note of the top voice.
   final String? tempo;
@@ -162,6 +175,13 @@ class _Tune {
   /// tune has no `V:` field at all).
   final List<String> order;
   final Map<String, Clef> clefs;
+
+  /// Per-voice names from `V:… nm="…"` / `name=…` — rendered as instrument
+  /// labels beside each staff of a multi-voice system.
+  final Map<String, String> names;
+
+  /// Per-voice notation engine from `V:… st=jianpu` (non-standard only).
+  final Map<String, StaffType> staffTypes;
   final Map<String, StringBuffer> bodies;
   final Map<String, List<String>> lyrics;
 
@@ -181,10 +201,13 @@ class _Tune {
     this.unit,
     this.key,
     this.headerClef,
+    this.headerClefExplicit,
     this.tempo,
     this.tempoMark,
     this.order,
     this.clefs,
+    this.names,
+    this.staffTypes,
     this.bodies,
     this.lyrics,
     this.symbols, {
@@ -195,11 +218,22 @@ class _Tune {
 
   /// Builds the [Score] for one voice [id].
   Score buildScore(String id) {
-    final clef = clefs[id] ?? headerClef;
     // Prefix ids per voice so a multi-voice system keeps them unique.
     final prefix = order.length > 1 ? 'v${order.indexOf(id)}e' : 'e';
     final parser = _AbcBody(bodies[id]!.toString(), unit, key, idPrefix: prefix)
       ..parse();
+    var clef = clefs[id] ?? headerClef;
+    // A voice with no clef anywhere (no `V:… clef=…`, no `K:… clef=…` header,
+    // no mid-tune `[K:… clef=…]`) gets one inferred from its pitch layout:
+    // the treble/bass clef whose ledger lines are fewest (ties stay on the
+    // conventional treble). An explicit clef is never second-guessed — a
+    // guitar part written an octave low in treble keeps its treble clef.
+    final explicit = clefs[id] != null || headerClefExplicit;
+    final hasMidClef = parser.measures
+        .any((m) => m.clefChange != null || m.inlineClefs.isNotEmpty);
+    if (!explicit && !hasMidClef) {
+      clef = _inferClef(parser.measures, clef);
+    }
     final measures = parser.measures.isEmpty
         ? [
             Measure([RestElement(NoteDuration.whole, id: '${prefix}0')]),
@@ -234,6 +268,7 @@ class _Tune {
 
     return Score(
       clef: clef,
+      staffType: staffTypes[id] ?? StaffType.standard,
       keySignature: key,
       timeSignature: meter,
       tempo: id == order.first ? tempoMark : null,
@@ -247,10 +282,54 @@ class _Tune {
       // library listing. Only the FIRST voice takes them: they are tune-level,
       // and repeating them per staff would duplicate the title on every part.
       metadata: order.indexOf(id) <= 0
-          ? ScoreMetadata(title: title, composer: composer, words: words)
-          : const ScoreMetadata(),
+          ? ScoreMetadata(
+              title: title,
+              composer: composer,
+              words: words,
+              instrument: names[id],
+            )
+          : ScoreMetadata(instrument: names[id]),
     );
   }
+}
+
+/// The clef that lays out [measures] with the fewest ledger lines, choosing
+/// between [Clef.treble] and [Clef.bass]. A tie keeps [fallback] (the
+/// conventional treble), so a tune without pitched content keeps its clef.
+/// Rests carry no pitch and are ignored.
+Clef _inferClef(List<Measure> measures, Clef fallback) {
+  var treble = 0;
+  var bass = 0;
+  var pitched = false;
+  for (final measure in measures) {
+    for (final voice in [
+      measure.elements,
+      measure.voice2,
+      measure.voice3,
+      measure.voice4,
+    ]) {
+      for (final element in voice) {
+        if (element is! NoteElement) continue;
+        pitched = true;
+        for (final pitch in element.pitches) {
+          treble += _ledgerCount(pitch, Clef.treble);
+          bass += _ledgerCount(pitch, Clef.bass);
+        }
+      }
+    }
+  }
+  if (!pitched) return fallback;
+  return bass < treble ? Clef.bass : Clef.treble;
+}
+
+/// Ledger lines a notehead at [Pitch.staffPosition] draws — one per line
+/// position outside the five-line staff, matching the layout engine's rule 8
+/// (middle C sits at position −2 in treble, on the first ledger line below).
+int _ledgerCount(Pitch pitch, Clef clef) {
+  final position = pitch.staffPosition(clef);
+  if (position < 0) return -position ~/ 2;
+  if (position > 8) return (position - 8) ~/ 2;
+  return 0;
 }
 
 /// How many tunes [abc] holds — the number of `X:` headers, and at least 1 so
@@ -269,6 +348,7 @@ _Tune _collectTune(String abc, {int tune = 0}) {
   Fraction? unitLen;
   var key = const KeySignature(0);
   var headerClef = Clef.treble;
+  var headerClefExplicit = false;
   String? tempo;
   Tempo? tempoMark;
   String? title;
@@ -279,6 +359,8 @@ _Tune _collectTune(String abc, {int tune = 0}) {
 
   final order = <String>[];
   final clefs = <String, Clef>{};
+  final names = <String, String>{};
+  final staffTypes = <String, StaffType>{};
   final bodies = <String, StringBuffer>{};
   final lyrics = <String, List<String>>{};
   final symbols = <String, List<String>>{};
@@ -302,9 +384,11 @@ _Tune _collectTune(String abc, {int tune = 0}) {
 
   // Declares/updates a voice from a `V:` value ("1 clef=bass name=…").
   void declareVoice(String value, {bool switchTo = false}) {
-    final (id, clef) = _parseVoiceHeader(value);
+    final (id, clef, name, staffType) = _parseVoiceHeader(value);
     ensure(id);
     if (clef != null) clefs[id] = clef;
+    if (name != null) names[id] = name;
+    if (staffType != null) staffTypes[id] = staffType;
     if (switchTo) current = id;
   }
 
@@ -353,7 +437,10 @@ _Tune _collectTune(String abc, {int tune = 0}) {
         case 'K':
           final parsed = _parseKey(value);
           key = parsed.$1;
-          headerClef = parsed.$2 ?? headerClef;
+          if (parsed.$2 != null) {
+            headerClef = parsed.$2!;
+            headerClefExplicit = true;
+          }
           sawKey = true; // the K field ends the header; the body follows
       }
       continue;
@@ -416,10 +503,13 @@ _Tune _collectTune(String abc, {int tune = 0}) {
     unit,
     key,
     headerClef,
+    headerClefExplicit,
     tempo,
     tempoMark,
     order,
     clefs,
+    names,
+    staffTypes,
     bodies,
     lyrics,
     symbols,
@@ -466,8 +556,11 @@ String _tempoNote(int num, int den) {
   return '$num/$den';
 }
 
-/// Parses a `V:` value ("1 clef=bass name=…") into its id and optional clef.
-(String, Clef?) _parseVoiceHeader(String value) {
+/// Parses a `V:` value ("1 clef=bass nm=…") into its id, optional clef,
+/// optional voice/instrument name (`nm="…"` / `name="…"`), and optional
+/// notation engine (`st=jianpu` — a non-ABC extension used by the studio to
+/// give each voice of a full score its own staff type).
+(String, Clef?, String?, StaffType?) _parseVoiceHeader(String value) {
   final id = value.trim().split(RegExp(r'\s')).first;
   Clef? clef;
   final cm = RegExp(r'clef\s*=\s*"?([A-Za-z]+)').firstMatch(value);
@@ -485,7 +578,31 @@ String _tempoNote(int num, int den) {
       clef = Clef.percussion;
     }
   }
-  return (id, clef);
+  // Voice/instrument name: `nm="Vocal"` or unquoted `name=Vocal`. Only the
+  // full name — `snm=`/`short=` (abbreviated labels) is not modeled.
+  String? name;
+  final nm = RegExp(r'(?:name|nm)\s*=\s*(?:"([^"]*)"|(\S+))')
+      .firstMatch(value);
+  if (nm != null) {
+    final n = (nm[1] ?? nm[2] ?? '').trim();
+    if (n.isNotEmpty) name = n;
+  }
+  // Notation engine: `st=jianpu` / `st=tablature` / `st=percussion`.
+  StaffType? staffType;
+  final st = RegExp(r'st\s*=\s*"?([A-Za-z]+)').firstMatch(value);
+  if (st != null) {
+    switch (st[1]!.toLowerCase()) {
+      case 'jianpu':
+        staffType = StaffType.jianpu;
+      case 'tablature':
+        staffType = StaffType.tablature;
+      case 'percussion':
+        staffType = StaffType.percussion;
+      case 'standard':
+        staffType = StaffType.standard;
+    }
+  }
+  return (id, clef, name, staffType);
 }
 
 bool _isFieldLetter(String c) {

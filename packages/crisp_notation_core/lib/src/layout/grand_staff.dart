@@ -29,6 +29,9 @@ ScoreLayout layoutStaff(
   bool showNoteNames = false,
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
+  bool showMeasureNumbers = false,
+  int measureNumberInterval = 1,
+  int measureNumberOffset = 0,
 }) {
   if (score.staffType == StaffType.jianpu) {
     return const JianpuLayoutEngine().layout(
@@ -58,6 +61,9 @@ ScoreLayout layoutStaff(
     showNoteNames: showNoteNames,
     showNoteOctaves: showNoteOctaves,
     noteNameStyle: noteNameStyle,
+    showMeasureNumbers: showMeasureNumbers,
+    measureNumberInterval: measureNumberInterval,
+    measureNumberOffset: measureNumberOffset,
   );
 }
 

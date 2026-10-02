@@ -1,4 +1,4 @@
-﻿/// SVG export: renders a laid-out [ScoreLayout] to a standalone SVG document.
+/// SVG export: renders a laid-out [ScoreLayout] to a standalone SVG document.
 ///
 /// Pure Dart and dependency-free — it turns the layout's display list
 /// (glyphs, lines, curves, beams, text) into SVG shapes, so the same emitter
@@ -77,6 +77,8 @@ String systemsToSvg(
   double staffSpace = 12,
   double systemGap = 8,
   ScoreMetadata? metadata,
+  bool showSystemMeasureNumbers = false,
+  bool numberFirstSystem = false,
   String glyphFontFamily = 'Bravura',
   String textFontFamily = _defaultTextFontFamily,
   String color = '#000000',
@@ -98,7 +100,18 @@ String systemsToSvg(
         textFontFamily);
   }
   var y = titleTop * staffSpace;
-  for (final system in wrapped.systems) {
+  for (var i = 0; i < wrapped.systems.length; i++) {
+    final system = wrapped.systems[i];
+    if (showSystemMeasureNumbers && (i > 0 || numberFirstSystem)) {
+      _emitMeasureNumber(
+          b,
+          system.firstMeasure + 1,
+          0.5 * staffSpace,
+          y + (system.layout.top - 1.0) * staffSpace,
+          staffSpace,
+          color,
+          textFontFamily);
+    }
     _emitStaff(b, system.layout, staffSpace, y - system.layout.top * staffSpace,
         color, glyphFontFamily, textFontFamily, elementColors);
     y += (system.layout.height + systemGap) * staffSpace;
@@ -294,6 +307,7 @@ String staffSystemSystemsToSvg(
   double leftMargin = 0,
   bool showInstrumentLabels = false,
   bool showSystemMeasureNumbers = false,
+  bool numberFirstSystem = false,
   bool showTitle = false,
   String glyphFontFamily = 'Bravura',
   String textFontFamily = _defaultTextFontFamily,
@@ -319,7 +333,7 @@ String staffSystemSystemsToSvg(
       _emitInstrumentLabels(
           b, system.layout, staffSpace, y, leftMargin, color, textFontFamily);
     }
-    if (showSystemMeasureNumbers && i > 0) {
+    if (showSystemMeasureNumbers && (i > 0 || numberFirstSystem)) {
       _emitSystemMeasureNumber(
           b, system, staffSpace, y, leftMargin, color, textFontFamily);
     }
@@ -435,9 +449,27 @@ void _emitSystemMeasureNumber(
   String textFontFamily,
 ) {
   final layout = system.layout;
-  final number = system.firstMeasure + 1;
-  final x = (leftMargin + 0.5) * staffSpace;
-  final y = baseY + (layout.staffTop(0) - layout.top - 1.0) * staffSpace;
+  _emitMeasureNumber(
+      b,
+      system.firstMeasure + 1,
+      (leftMargin + 0.5) * staffSpace,
+      baseY + (layout.staffTop(0) - layout.top - 1.0) * staffSpace,
+      staffSpace,
+      color,
+      textFontFamily);
+}
+
+/// A small bar number at ([x], [y]) px — the shared emitter for the
+/// per-system measure numbers of [systemsToSvg] and [staffSystemSystemsToSvg].
+void _emitMeasureNumber(
+  StringBuffer b,
+  int number,
+  double x,
+  double y,
+  double staffSpace,
+  String color,
+  String textFontFamily,
+) {
   b.writeln('<text x="${_n(x)}" y="${_n(y)}" '
       'font-family="$textFontFamily" font-size="${_n(0.9 * staffSpace)}" '
       'text-anchor="start" fill="$color" stroke="none">$number</text>');

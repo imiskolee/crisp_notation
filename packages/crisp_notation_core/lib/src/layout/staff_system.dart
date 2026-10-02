@@ -327,6 +327,9 @@ StaffSystemLayout layoutStaffSystem(
   bool showNoteNames = false,
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
+  bool showMeasureNumbers = false,
+  int measureNumberInterval = 1,
+  int measureNumberOffset = 0,
 }) {
   if (hideEmptyStaves) {
     system = _withEmptyStavesHidden(system);
@@ -378,8 +381,8 @@ StaffSystemLayout layoutStaffSystem(
         ];
 
   final staves = [
-    for (final s in system.staves)
-      layoutStaff(s, settings,
+    for (var i = 0; i < system.staves.length; i++)
+      layoutStaff(system.staves[i], settings,
           leadingWidth: leading,
           measureWidths: measureWidths,
           forcedColumns: columns,
@@ -389,7 +392,12 @@ StaffSystemLayout layoutStaffSystem(
           spacingStretch: spacingStretch,
           showNoteNames: showNoteNames,
           showNoteOctaves: showNoteOctaves,
-          noteNameStyle: noteNameStyle),
+          noteNameStyle: noteNameStyle,
+          // Numbers sit above the top staff only — every lower staff shares
+          // the same bar grid, so repeating them per staff would stack.
+          showMeasureNumbers: showMeasureNumbers && i == 0,
+          measureNumberInterval: measureNumberInterval,
+          measureNumberOffset: measureNumberOffset),
   ];
 
   var resolvedStaffGap = staffGap;

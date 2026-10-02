@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### ABC clef inference
+
+An ABC voice with no explicit clef anywhere (`V:… clef=…`, `K:… clef=…` or a
+mid-tune `[K:… clef=…]`) now gets one inferred from its pitch layout — treble
+or bass, whichever draws fewer ledger lines (ties keep treble). An unannotated
+low part (a bass line, a guitar part written at pitch) used to import in treble
+and drown in leger lines; it now reads in bass. Explicit clefs are never
+second-guessed.
+
 ### GPIF (`.gp`) round-trip fidelity
 
 The GPIF export/import is now a high-fidelity tablature round-trip. On top of the

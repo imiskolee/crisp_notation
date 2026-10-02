@@ -753,6 +753,12 @@ the system still aligns rather than failing. `multiPartScoreFromAbc(abc)` →
 `layoutMultiPartPages` / `MultiPartView`. All three throw `FormatException` if no
 tune body / `K:` field is found.
 
+Clef inference: a voice whose clef is explicit anywhere (`V:… clef=…`,
+`K:… clef=…` header, or a mid-tune `[K:… clef=…]`) keeps it verbatim. A voice
+with NO clef gets one inferred from its pitch layout — treble or bass, whichever
+draws fewer ledger lines (ties keep treble) — so an unannotated low part reads
+in bass clef instead of stacking leger lines below a treble staff.
+
 Subset: a broad slice of **ABC 2.1** — the `M`/`L`/`K` header, then pitched notes
 (accidentals from the key + in-measure state, octave marks, `L`-relative and
 fractional lengths), rests, chords, broken rhythm (`>`/`<`), ties, tuplets,
@@ -811,7 +817,8 @@ every staff of a multi-staff part — becomes one aligned staff. Multi-staff par
 **Layout.** `layoutStaffSystemSystems(document, settings, {required maxWidth,
 staffGap = 4.0, justify = true, gridAlign = true, hideEmptyStaves = false,
 systemBreaks = const {}, showNoteNames = false, noteNameStyle =
-NoteNameStyle.letter})` → `StaffSystemSystems` breaks a `StaffSystem` into
+NoteNameStyle.letter, showMeasureNumbers = false, measureNumberInterval = 1})`
+→ `StaffSystemSystems` breaks a `StaffSystem` into
 systems no wider than `maxWidth`. Measures are packed by the **widest** part so
 barlines stay aligned across every part; the time signature draws only on the
 first system (and at explicit changes); every non-final system closes with a
@@ -820,13 +827,20 @@ shared note-spacing stretch. With `hideEmptyStaves`, a part whose measures over 
 system's range are entirely rests is dropped from that system (the orchestral
 space-saver) — the first system always shows every part, a would-be-blank system
 keeps all its parts, and brackets/barline groups clip to what remains. Throws if
-the parts disagree on measure count or `maxWidth` ≤ 0. `StaffSystemSystems`
+the parts disagree on measure count or `maxWidth` ≤ 0. With
+`showMeasureNumbers`, bar numbers draw above the **top** staff only (every lower
+staff shares the bar grid); `measureNumberInterval = n` numbers only bars whose
+number is a multiple of n (bar 1 always included), pickup-aware. Sliced systems
+keep the source document's numbering — the offset of counted bars before the
+slice is threaded through, so numbering stays continuous across line breaks.
+`StaffSystemSystems`
 carries `systems` / `maxWidth` and `heightWith(systemGap)`; each
 `StaffSystemSystem` has `layout`, `firstMeasure`, `lastMeasure`.
 
 `layoutMultiPartPages(document, settings, {required metrics, staffGap = 4.0,
 systemGap = 8, justifyVertically = true, justify = true, hideEmptyStaves = false,
-showNoteNames = false, noteNameStyle})` → `MultiPartPagedLayout` (`pages` /
+showNoteNames = false, noteNameStyle, showMeasureNumbers = false,
+measureNumberInterval = 1})` → `MultiPartPagedLayout` (`pages` /
 `metrics` / `systemWidth`) paginates a `MultiPartScore` on the same rules as
 `layoutPages`: pages of `MultiPartPageLayout` (`systems`, `justified`) holding
 `PositionedMultiPartSystem` (`system`, `top`).

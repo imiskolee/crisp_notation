@@ -79,6 +79,7 @@ class LayoutEngine {
     bool showBeatNumbers = false,
     bool showMeasureNumbers = false,
     int measureNumberInterval = 1,
+    int measureNumberOffset = 0,
     Map<String, bool> deferredStems = const {},
     Map<String, List<int>> extraFingerings = const {},
     List<Map<Fraction, double>>? forcedColumns,
@@ -99,6 +100,7 @@ class LayoutEngine {
         showBeatNumbers: showBeatNumbers,
         showMeasureNumbers: showMeasureNumbers,
         measureNumberInterval: measureNumberInterval,
+        measureNumberOffset: measureNumberOffset,
         deferredStems: deferredStems,
         extraFingerings: extraFingerings,
         forcedColumns: forcedColumns,
@@ -125,6 +127,12 @@ class _LayoutBuilder {
   final bool showBeatNumbers;
   final bool showMeasureNumbers;
   final int measureNumberInterval;
+
+  /// Added to the slice-local bar number to get the **source document's** bar
+  /// number — the count of counted (non-pickup) bars preceding this score in
+  /// the document, so a sliced system's measure-number overlay keeps the
+  /// document's numbering. 0 for a whole score.
+  final int measureNumberOffset;
 
   /// Fingering marks to draw that the score itself does not carry, keyed by
   /// note-element id (see [LayoutEngine.layout]'s `extraFingerings`).
@@ -268,6 +276,7 @@ class _LayoutBuilder {
     this.showBeatNumbers = false,
     this.showMeasureNumbers = false,
     this.measureNumberInterval = 1,
+    this.measureNumberOffset = 0,
     this.deferredStems = const {},
     this.extraFingerings = const {},
     this.forcedColumns,

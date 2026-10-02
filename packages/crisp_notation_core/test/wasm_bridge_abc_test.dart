@@ -42,4 +42,19 @@ void main() {
     expect(entrypoint, contains('abcToSvg'));
     expect(entrypoint, contains('abcToStudioNotes'));
   });
+
+  test('multi-voice ABC renders every voice as a labelled staff', () {
+    final svg = abcToSvg(
+      'X:1\nM:4/4\nL:1/4\nK:C\n'
+      'V:1 nm="Vocal"\nV:2 name=Guitar clef=bass\n'
+      '[V:1] C D E F\n[V:2] C, D, E, F,\n',
+      metadata,
+      'standard',
+    );
+
+    expect(svg, isNot(startsWith('error:')));
+    expect(svg, contains('>Vocal<'));
+    expect(svg, contains('>Guitar<'));
+    expect(svg.trimRight(), endsWith('</svg>'));
+  });
 }

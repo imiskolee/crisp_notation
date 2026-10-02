@@ -126,8 +126,10 @@ extension _Overlays on _LayoutBuilder {
     };
     for (var mi = 0; mi < score.measures.length; mi++) {
       final measure = score.measures[mi];
-      final barNo = score.barNumberAt(mi);
-      if (barNo == null) continue; // anacrusis: uncounted, unnumbered
+      final localBarNo = score.barNumberAt(mi);
+      if (localBarNo == null) continue; // anacrusis: uncounted, unnumbered
+      // Re-anchor a sliced system in its source document's bar numbering.
+      final barNo = localBarNo + measureNumberOffset;
       if (interval > 1 && barNo != 1 && barNo % interval != 0) continue;
       // Anchor at the leftmost laid-out element of the measure.
       _TieInfo? anchor;
