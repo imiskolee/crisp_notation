@@ -259,5 +259,20 @@ void main() {
       expect(jianpuDigitXs(layout.staves[1]).length, 4);
       expect(noteheadXs(layout.staves[1]), isEmpty);
     });
+
+    test('keeps jianpu onset spacing natural in a multi-voice system', () {
+      final first = jianpuScore('c4:q d4 e4 f4 | g4:q a4 b4 c5');
+      final second = jianpuScore('c3:h e3:h | g3:h b3:h');
+      final natural = const JianpuLayoutEngine().layout(first, settings);
+      final systems = layoutStaffSystemSystems(
+        StaffSystem([first, second]),
+        settings,
+        maxWidth: 100,
+      );
+      final wrapped = jianpuDigitXs(systems.systems.first.layout.staves.first);
+      final naturalXs = jianpuDigitXs(natural);
+      expect(
+          wrapped[1] - wrapped[0], closeTo(naturalXs[1] - naturalXs[0], 0.01));
+    });
   });
 }

@@ -16,10 +16,14 @@ class _RenderOptions {
   final String? author;
   final bool showTitle;
   final bool showAuthor;
+
   /// 'system' = a number at each system start, 'all' = every measure.
   final String measureNumbers;
   final String pageSize;
+  final double? pageWidthPx;
+  final double? pageHeightPx;
   final double paddingPx;
+
   /// How paged output is assembled: 'horizontal' stacks pages left-to-right in
   /// one SVG (the score view's filmstrip); 'vertical' emits one SVG per page
   /// joined by a `<!--crisp-page-->` marker so the frontend can stack and print
@@ -40,6 +44,8 @@ class _RenderOptions {
         showAuthor = (json['showAuthor'] as bool?) ?? true,
         measureNumbers = (json['measureNumbers'] as String?) ?? 'system',
         pageSize = (json['pageSize'] as String?) ?? '',
+        pageWidthPx = (json['pageWidthPx'] as num?)?.toDouble(),
+        pageHeightPx = (json['pageHeightPx'] as num?)?.toDouble(),
         paddingPx = (json['paddingPx'] as num?)?.toDouble() ?? 0,
         pageFlow = (json['pageFlow'] as String?) ?? 'horizontal';
 
@@ -56,19 +62,26 @@ class _RenderOptions {
 
   String resolveBackground() {
     switch (background) {
-      case 'scroll': return '#ffffff';
-      case 'sky': return '#eaf3fb';
-      case 'custom': return backgroundCustom;
+      case 'scroll':
+        return '#ffffff';
+      case 'sky':
+        return '#eaf3fb';
+      case 'custom':
+        return backgroundCustom;
       case 'paper':
-      default: return '#fffaf0';
+      default:
+        return '#fffaf0';
     }
   }
 
   double spacingMultiplier() {
     switch (density) {
-      case 'compact': return 0.8;
-      case 'spacious': return 1.25;
-      default: return 1.0;
+      case 'compact':
+        return 0.8;
+      case 'spacious':
+        return 1.25;
+      default:
+        return 1.0;
     }
   }
 }
@@ -105,8 +118,8 @@ String abcToSvg(String abcText, String bravuraMetaJson, String staffTypeName,
         !opts.showAuthor) {
       score = score.copyWith(
         metadata: score.metadata.copyWith(
-          title: _resolvedField(
-              opts.showTitle, opts.title, score.metadata.title),
+          title:
+              _resolvedField(opts.showTitle, opts.title, score.metadata.title),
           composer: _resolvedField(
               opts.showAuthor, opts.author, score.metadata.composer),
         ),
@@ -153,8 +166,8 @@ StaffSystem _prepareSystem(
     staves = [
       first.copyWith(
         metadata: first.metadata.copyWith(
-          title: _resolvedField(
-              opts.showTitle, opts.title, first.metadata.title),
+          title:
+              _resolvedField(opts.showTitle, opts.title, first.metadata.title),
           composer: _resolvedField(
               opts.showAuthor, opts.author, first.metadata.composer),
         ),
@@ -215,8 +228,8 @@ String _renderStaffSystemToSvg(
   } else if (opts.maxWidth > 0) {
     maxWidth = opts.maxWidth;
   } else if (opts.measuresPerLine > 0) {
-    maxWidth = _probeSystemWidthForMeasures(system, settings,
-        opts.measuresPerLine, leftMargin);
+    maxWidth = _probeSystemWidthForMeasures(
+        system, settings, opts.measuresPerLine, leftMargin);
   } else {
     maxWidth = 56.0;
   }
@@ -249,8 +262,8 @@ String _renderStaffSystemToSvg(
   // screen preview; print CSS splits the pages). Mirrors the single-voice
   // `_planPages`: line-break to the content width, then pack systems into
   // pages, reserving the title-block height on the first page.
-  final pageWpx = pageMm.w * 96 / 25.4;
-  final pageHpx = pageMm.h * 96 / 25.4;
+  final pageWpx = opts.pageWidthPx ?? pageMm.w * 96 / 25.4;
+  final pageHpx = opts.pageHeightPx ?? pageMm.h * 96 / 25.4;
   final padPx = opts.paddingPx;
   final padSs = padPx / staffSpace;
   final contentWidthSs = pageWpx / staffSpace - 2 * padSs - leftMargin;
@@ -341,8 +354,8 @@ String _renderStaffSystemToSvg(
 /// The natural width of the widest part's first [n] measures plus the label
 /// margin — the multi-voice counterpart of [_probeWidthForMeasures], used to
 /// line-break at approximately N measures per system.
-double _probeSystemWidthForMeasures(StaffSystem system,
-    LayoutSettings settings, int n, double leftMargin) {
+double _probeSystemWidthForMeasures(
+    StaffSystem system, LayoutSettings settings, int n, double leftMargin) {
   var width = 0.0;
   for (final part in system.staves) {
     if (part.measures.isEmpty) continue;
@@ -364,8 +377,8 @@ double _probeSystemWidthForMeasures(StaffSystem system,
 
 /// The engraved title/composer block (matches svg_export's `_emitTitleBlock`):
 /// the title centred over [maxWidth], the composer right-aligned below.
-void _emitTitleBlock(ScoreMetadata metadata, double staffSpace,
-    double maxWidth, String color, String textFontFamily, StringBuffer b) {
+void _emitTitleBlock(ScoreMetadata metadata, double staffSpace, double maxWidth,
+    String color, String textFontFamily, StringBuffer b) {
   List<String> lines(String? text) => (text ?? '')
       .split('\n')
       .map((line) => line.trim())
@@ -428,6 +441,9 @@ String abcToStudioNotes(String abcText) {
             'beat': beatCursor,
             'duration': durationBeats,
             'pitch': element.pitches.first.midiNumber,
+            'pitches': [
+              for (final pitch in element.pitches) pitch.midiNumber,
+            ],
             'lyric': lyricById[element.id] ?? '',
           });
         }
@@ -450,10 +466,14 @@ String abcToStudioNotes(String abcText) {
 
 StaffType _parseStaffType(String value) {
   switch (value) {
-    case 'jianpu': return StaffType.jianpu;
-    case 'tablature': return StaffType.tablature;
-    case 'percussion': return StaffType.percussion;
-    default: return StaffType.standard;
+    case 'jianpu':
+      return StaffType.jianpu;
+    case 'tablature':
+      return StaffType.tablature;
+    case 'percussion':
+      return StaffType.percussion;
+    default:
+      return StaffType.standard;
   }
 }
 
@@ -463,8 +483,8 @@ String _n(double value) {
   return s.replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
-String _svgOpen(double widthPx, double heightPx, String fontFamily,
-    String background) {
+String _svgOpen(
+    double widthPx, double heightPx, String fontFamily, String background) {
   final sb = StringBuffer();
   sb.write('<svg xmlns="http://www.w3.org/2000/svg" ');
   sb.write('xmlns:xlink="http://www.w3.org/1999/xlink" ');
@@ -486,8 +506,7 @@ String _svgOpen(double widthPx, double heightPx, String fontFamily,
   return (content: m.group(3)!, w: w, h: h);
 }
 
-double _probeWidthForMeasures(
-    Score score, LayoutSettings settings, int n) {
+double _probeWidthForMeasures(Score score, LayoutSettings settings, int n) {
   if (score.measures.isEmpty) return 56.0;
   final take = n < 1 ? score.measures.length : n;
   final sub = Score(
@@ -501,11 +520,8 @@ double _probeWidthForMeasures(
   return layout.width + 4.0;
 }
 
-List<List<SystemLayout>> _planPages(
-    List<SystemLayout> systems,
-    double pageHStaffSpaces,
-    double systemGap,
-    double titleTopStaff) {
+List<List<SystemLayout>> _planPages(List<SystemLayout> systems,
+    double pageHStaffSpaces, double systemGap, double titleTopStaff) {
   const footer = 3.0;
   final pages = <List<SystemLayout>>[];
   var cur = <SystemLayout>[];
@@ -513,9 +529,8 @@ List<List<SystemLayout>> _planPages(
   var avail = pageHStaffSpaces - titleTopStaff - footer;
 
   for (final system in systems) {
-    final need = cur.isEmpty
-        ? system.layout.height
-        : systemGap + system.layout.height;
+    final need =
+        cur.isEmpty ? system.layout.height : systemGap + system.layout.height;
     if (cur.isNotEmpty && used + need > avail) {
       pages.add(cur);
       cur = [];
@@ -524,8 +539,8 @@ List<List<SystemLayout>> _planPages(
     }
     cur.add(system);
     used += (cur.length == 1
-            ? system.layout.height
-            : systemGap + system.layout.height);
+        ? system.layout.height
+        : systemGap + system.layout.height);
   }
   if (cur.isNotEmpty) pages.add(cur);
   return pages;
@@ -572,7 +587,8 @@ String _renderScoreToSvg(
   final staffSpace = opts.staffSpace;
   final background = opts.resolveBackground();
   const glyphFontFamily = 'Bravura';
-  const textFontFamily = "Academico, 'New York', 'Times New Roman', Times, serif";
+  const textFontFamily =
+      "Academico, 'New York', 'Times New Roman', Times, serif";
   const color = '#1e232b';
   const systemGap = 8.0;
 
@@ -648,8 +664,8 @@ String _renderScoreToSvg(
     );
   }
 
-  final pageWpx = pageMm.w * 96 / 25.4;
-  final pageHpx = pageMm.h * 96 / 25.4;
+  final pageWpx = opts.pageWidthPx ?? pageMm.w * 96 / 25.4;
+  final pageHpx = opts.pageHeightPx ?? pageMm.h * 96 / 25.4;
   final padPx = opts.paddingPx;
   const gapBetweenPagesPx = 16.0;
 
@@ -663,7 +679,7 @@ String _renderScoreToSvg(
       color: color,
       background: 'none',
     );
-    final innerW = singleLineLayout!.width * staffSpace;
+    final innerW = singleLineLayout.width * staffSpace;
     final innerH = singleLineLayout.height * staffSpace;
     final availW = pageWpx - padPx * 2;
     final availH = pageHpx - padPx * 2;
@@ -685,9 +701,7 @@ String _renderScoreToSvg(
     return out.toString();
   }
 
-  final titleTopStaff = hasTitle
-      ? _titleBlockHeight(metadataForTitle)
-      : 0.0;
+  final titleTopStaff = hasTitle ? _titleBlockHeight(metadataForTitle) : 0.0;
   final pages = maxHeightFromPage == null
       ? [wrapped.systems]
       : _planPages(
@@ -696,8 +710,8 @@ String _renderScoreToSvg(
 
   final wrappedLayout = wrapped; // non-null past the single-line guard above
   String pageSvgFor(int p) {
-    final sub = MultiSystemLayout(
-        systems: pages[p], maxWidth: wrappedLayout.maxWidth);
+    final sub =
+        MultiSystemLayout(systems: pages[p], maxWidth: wrappedLayout.maxWidth);
     return systemsToSvg(
       sub,
       staffSpace: staffSpace,

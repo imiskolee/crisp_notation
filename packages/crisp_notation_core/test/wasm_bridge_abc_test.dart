@@ -31,6 +31,16 @@ void main() {
     expect((payload['notes'] as List), hasLength(4));
   });
 
+  test('preserves all MIDI pitches for an ABC chord', () {
+    final payload = jsonDecode(abcToStudioNotes(
+      'X:1\nT:Chord\nM:4/4\nL:1/4\nK:C\n[CEG]|',
+    )) as Map<String, dynamic>;
+
+    final notes = payload['notes'] as List<dynamic>;
+    expect(notes, hasLength(1));
+    expect(notes.single['pitches'], [60, 64, 67]);
+  });
+
   test('Wasm bridge exposes only ABC conversion APIs', () {
     final entrypoint = File('example/wasm/score_bridge.dart').readAsStringSync();
     final conversion =

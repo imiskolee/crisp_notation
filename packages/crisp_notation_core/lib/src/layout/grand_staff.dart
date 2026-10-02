@@ -97,7 +97,10 @@ List<Map<Fraction, double>> alignedColumns(
           drawTimeSignature: true,
           finalBarline: true)
   ];
-  final ink = [for (final layout in natural) _inkMetrics(layout)];
+  final ink = [
+    for (var i = 0; i < natural.length; i++)
+      _inkMetrics(natural[i], isJianpu: staves[i].staffType == StaffType.jianpu)
+  ];
 
   final measureCount = staves.first.measures.length;
   final result = <Map<Fraction, double>>[];
@@ -107,12 +110,6 @@ List<Map<Fraction, double>> alignedColumns(
     // matching the engine's multi-voice onset arithmetic).
     final leftAt = <Fraction, double>{};
     final rightAt = <Fraction, double>{};
-    // A jianpu element's advance is NOT ink-derived — it runs digit-centre to
-    // next digit-centre and covers dash trains (增时线格位) and lyric reserves
-    // the ink floor cannot see. Without this floor the forced pass overruns
-    // the shared column (worst at the closing barline, where the next
-    // column's left ink is 0) and the staff's barlines drift off the system.
-    final advanceAt = <Fraction, double>{};
     var measureEnd = Fraction.zero;
     for (var si = 0; si < staves.length; si++) {
       final measure = staves[si].measures[m];
@@ -131,9 +128,6 @@ List<Map<Fraction, double>> alignedColumns(
               : voices[v][i].duration.toFraction();
         }
         if (onset > measureEnd) measureEnd = onset;
-      }
-      if (staves[si].staffType == StaffType.jianpu) {
-        _jianpuAdvanceFloors(staves[si], natural[si], m, ink[si], advanceAt);
       }
     }
 
@@ -154,53 +148,12 @@ List<Map<Fraction, double>> alignedColumns(
           k + 1 < onsets.length ? (leftAt[onsets[k + 1]] ?? 0.0) : 0.0;
       final collision =
           (rightAt[onsets[k]] ?? 0.0) + nextLeft + settings.minNoteGap;
-      x += max(ideal, max(collision, advanceAt[onsets[k]] ?? 0.0));
+      x += max(ideal, collision);
     }
     columns[measureEnd] = x; // the closing-barline column
     result.add(columns);
   }
   return result;
-}
-
-/// Per-onset natural-advance floors for one jianpu staff's measure, read from
-/// its natural [layout]: each element's advance is the delta to the next
-/// element's anchor (digit centre → next digit centre); the last element's
-/// floor reaches the natural barline x. Results merge into [advanceAt].
-void _jianpuAdvanceFloors(
-  Score staff,
-  ScoreLayout layout,
-  int measureIndex,
-  Map<String, ({double anchor, double left, double right})> ink,
-  Map<Fraction, double> advanceAt,
-) {
-  final measure = staff.measures[measureIndex];
-  final elements = measure.elements;
-  if (elements.isEmpty) return;
-  if (measureIndex >= layout.measureRegions.length) return;
-  final onsets = <Fraction>[];
-  final anchors = <double?>[];
-  var onset = Fraction.zero;
-  for (var i = 0; i < elements.length; i++) {
-    onsets.add(onset);
-    final id = elements[i].id;
-    anchors.add(id == null ? null : ink[id]?.anchor);
-    onset += measure.effectiveDurationAt(i);
-  }
-  for (var i = 0; i < elements.length; i++) {
-    final a = anchors[i];
-    if (a == null) continue;
-    final double advance;
-    if (i + 1 < elements.length) {
-      final next = anchors[i + 1];
-      if (next == null) continue;
-      advance = next - a;
-    } else {
-      advance = layout.measureRegions[measureIndex].endX - a;
-    }
-    if (advance > (advanceAt[onsets[i]] ?? 0.0)) {
-      advanceAt[onsets[i]] = advance;
-    }
-  }
 }
 
 /// Per-element ink split about its anchor x, from a natural [layout]:
@@ -211,7 +164,8 @@ void _jianpuAdvanceFloors(
 /// aligns with a staff notehead at the same onset. Elements with neither
 /// anchor at their ink left.
 Map<String, ({double anchor, double left, double right})> _inkMetrics(
-    ScoreLayout layout) {
+    ScoreLayout layout,
+    {bool isJianpu = false}) {
   final headX = <String, double>{};
   final digitX = <String, double>{};
   for (final primitive in layout.primitives) {
@@ -233,8 +187,13 @@ Map<String, ({double anchor, double left, double right})> _inkMetrics(
     final b = region.bounds;
     final anchor =
         headX[region.elementId] ?? digitX[region.elementId] ?? b.left;
-    out[region.elementId] =
-        (anchor: anchor, left: anchor - b.left, right: b.right - anchor);
+    final left = anchor - b.left;
+    final right = b.right - anchor;
+    out[region.elementId] = (
+      anchor: anchor,
+      left: isJianpu ? min(left, 0.45) : left,
+      right: isJianpu ? min(right, 0.45) : right
+    );
   }
   return out;
 }
