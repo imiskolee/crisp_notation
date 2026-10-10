@@ -199,6 +199,7 @@ class RenderStaffView extends RenderBox {
 
   static const LayoutEngine _engine = LayoutEngine();
   static const JianpuLayoutEngine _jianpuEngine = JianpuLayoutEngine();
+  static const TabLayoutEngine _tabEngine = TabLayoutEngine();
   static const double _fallbackStaffSpace = 12;
 
   late final TapGestureRecognizer _tap;
@@ -433,6 +434,7 @@ class RenderStaffView extends RenderBox {
       StaffType.jianpu => _jianpuEngine.layout(_score, settings,
           drawKeyLabelText: _showJianpuHeader,
           drawTimeSignature: _showJianpuHeader),
+      StaffType.tablature => _tabEngine.layout(_score, Tuning.standardGuitar, settings),
       _ => _engine.layout(_score, settings,
           showNoteNames: _showNoteNames,
           noteNameStyle: _noteNameStyle,

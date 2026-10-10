@@ -277,14 +277,20 @@ extension _JianpuNotes on _JianpuBuilder {
 
   /// Renders a rest element: single `0` for quarter-and-shorter, multiple `0`s
   /// for longer rests per GB/T 46845-2025 §6.3.7.2.
-  void renderRestElement(NoteDuration duration, double digitX, String? id) {
+  void renderRestElement(NoteDuration duration, double digitX, String? id,
+      {Map<Fraction, double>? positionColumns,
+      double measureOrigin = 0,
+      Fraction noteOnset = Fraction.zero}) {
     final longRestUnits = JianpuLayoutEngine._longRestQuarterUnits(duration);
     if (longRestUnits <= 1) {
       primitives.add(TextPrimitive('0', Point(digitX, _digitBaseline),
           size: _digitSize, elementId: id));
     } else {
       for (var u = 0; u < longRestUnits; u++) {
-        final ux = digitX + u * quarterCell;
+        final ux = positionColumns != null && positionColumns.isNotEmpty
+            ? measureOrigin +
+                xAtTime(positionColumns, noteOnset + Fraction(u, 4))
+            : digitX + u * quarterCell;
         primitives.add(TextPrimitive('0', Point(ux, _digitBaseline),
             size: _digitSize, elementId: id));
       }
@@ -292,10 +298,39 @@ extension _JianpuNotes on _JianpuBuilder {
     if (id != null) anchorX[id] = digitX;
   }
 
+  /// Resolves the absolute-content x for time [f] from a proportional
+  /// onset→x column map: an exact key wins; otherwise linear interpolation
+  /// between the enclosing onset columns (so jianpu dashes land inside the
+  /// gaps regardless of how wide the pass stretched them).
+  double xAtTime(Map<Fraction, double> columns, Fraction f) {
+    final exact = columns[f];
+    if (exact != null) return exact;
+    final keys = columns.keys.toList()..sort();
+    Fraction? lo;
+    Fraction? hi;
+    for (final k in keys) {
+      if (k <= f) lo = k;
+      if (k >= f) {
+        hi = k;
+        break;
+      }
+    }
+    if (lo == null) return columns[hi]!;
+    if (hi == null || hi == lo) return columns[lo]!;
+    final t = (f - lo).toDouble() / (hi - lo).toDouble();
+    return columns[lo]! + t * (columns[hi]! - columns[lo]!);
+  }
+
   /// Draws 增时线 (duration dashes) and augmentation dots for a column.
-  void renderDurationMarks(double digitX, int dashes, int augDots, String? id) {
+  void renderDurationMarks(double digitX, int dashes, int augDots, String? id,
+      {Map<Fraction, double>? positionColumns,
+      double measureOrigin = 0,
+      Fraction noteOnset = Fraction.zero}) {
     for (var d = 0; d < dashes; d++) {
-      final cx = digitX + quarterCell * (d + 1);
+      final cx = positionColumns != null
+          ? measureOrigin +
+              xAtTime(positionColumns, noteOnset + Fraction(d + 1, 4))
+          : digitX + quarterCell * (d + 1);
       primitives.add(LinePrimitive(Point(cx - _dashLength / 2, _digitMid),
           Point(cx + _dashLength / 2, _digitMid),
           thickness: 0.18, elementId: id));

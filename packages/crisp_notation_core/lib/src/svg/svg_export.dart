@@ -8,12 +8,16 @@
 /// fully self-contained.
 library;
 
+import 'dart:math' as math;
+
 import '../layout/grand_staff.dart';
 import '../layout/multi_system.dart';
 import '../layout/score_layout.dart';
 import '../layout/staff_system.dart';
 import '../model/score.dart';
 import '../smufl/smufl_codepoints.dart';
+
+enum InstrumentLabels { none, page, first }
 
 const _defaultTextFontFamily =
     "Academico, 'New York', 'Times New Roman', Times, serif";
@@ -89,15 +93,13 @@ String systemsToSvg(
   final titleTop = metadata != null ? _titleBlockHeight(metadata) : 0.0;
   final widthPx = wrapped.maxWidth * staffSpace;
   final heightPx = (titleTop +
-          (wrapped.systems.isEmpty
-              ? 4.0
-              : wrapped.heightWith(systemGap))) *
+          (wrapped.systems.isEmpty ? 4.0 : wrapped.heightWith(systemGap))) *
       staffSpace;
   final b = StringBuffer();
   _svgOpen(b, widthPx, heightPx, glyphFontFamily, background, fontFaceDataUri);
   if (titleTop > 0) {
-    _emitTitleBlock(b, metadata!, staffSpace, 0, wrapped.maxWidth, color,
-        textFontFamily);
+    _emitTitleBlock(
+        b, metadata!, staffSpace, 0, wrapped.maxWidth, color, textFontFamily);
   }
   var y = titleTop * staffSpace;
   for (var i = 0; i < wrapped.systems.length; i++) {
@@ -305,6 +307,7 @@ String staffSystemSystemsToSvg(
   double staffSpace = 12,
   double systemGap = 8,
   double leftMargin = 0,
+  InstrumentLabels instrumentLabels = InstrumentLabels.first,
   bool showInstrumentLabels = false,
   bool showSystemMeasureNumbers = false,
   bool numberFirstSystem = false,
@@ -318,31 +321,52 @@ String staffSystemSystemsToSvg(
 }) {
   final metadata = _firstMetadata(wrapped);
   final titleTop = showTitle ? _titleBlockHeight(metadata) : 0.0;
-  final widthPx = (wrapped.maxWidth + leftMargin) * staffSpace;
+  final mode = showInstrumentLabels ? InstrumentLabels.first : instrumentLabels;
+  final margins = [
+    for (var i = 0; i < wrapped.systems.length; i++)
+      _systemLabelMargin(wrapped.systems[i].layout, mode, i == 0),
+  ];
+  final systemMargins = [
+    for (var i = 0; i < wrapped.systems.length; i++)
+      _showLabels(mode, i == 0)
+          ? (leftMargin > 0 ? leftMargin : margins[i])
+          : 0.0,
+  ];
+  final systemWidth = wrapped.systems.isEmpty
+      ? 0.0
+      : [
+          for (var i = 0; i < wrapped.systems.length; i++)
+            wrapped.systems[i].layout.width + systemMargins[i],
+        ].reduce(math.max);
+  final width = math.max(wrapped.maxWidth, systemWidth);
+  final widthPx = width * staffSpace;
   final heightPx = (titleTop + wrapped.heightWith(systemGap)) * staffSpace;
   final b = StringBuffer();
   _svgOpen(b, widthPx, heightPx, glyphFontFamily, background, fontFaceDataUri);
   if (titleTop > 0) {
-    _emitTitleBlock(b, metadata, staffSpace, leftMargin, wrapped.maxWidth,
+    final titleMargin = systemMargins.isEmpty ? 0.0 : systemMargins.first;
+    _emitTitleBlock(b, metadata, staffSpace, titleMargin, width - titleMargin,
         color, textFontFamily);
   }
   var y = titleTop * staffSpace;
   for (var i = 0; i < wrapped.systems.length; i++) {
     final system = wrapped.systems[i];
-    if (showInstrumentLabels && i == 0 && leftMargin > 0) {
+    final showLabels = _showLabels(mode, i == 0);
+    final margin = systemMargins[i];
+    if (margin > 0 && showLabels) {
       _emitInstrumentLabels(
-          b, system.layout, staffSpace, y, leftMargin, color, textFontFamily);
+          b, system.layout, staffSpace, y, margin, color, textFontFamily);
     }
     if (showSystemMeasureNumbers && (i > 0 || numberFirstSystem)) {
       _emitSystemMeasureNumber(
-          b, system, staffSpace, y, leftMargin, color, textFontFamily);
+          b, system, staffSpace, y, margin, color, textFontFamily);
     }
-    if (leftMargin > 0) {
-      b.writeln('<g transform="translate(${_n(leftMargin * staffSpace)} 0)">');
+    if (margin > 0) {
+      b.writeln('<g transform="translate(${_n(margin * staffSpace)} 0)">');
     }
     _emitStaffSystem(b, system.layout, staffSpace, y, color, glyphFontFamily,
         textFontFamily, elementColors);
-    if (leftMargin > 0) b.writeln('</g>');
+    if (margin > 0) b.writeln('</g>');
     y += (system.layout.height + systemGap) * staffSpace;
   }
   b.writeln('</svg>');
@@ -404,6 +428,29 @@ void _emitTitleBlock(
       y += 1.05 * staffSpace;
     }
   }
+}
+
+bool _showLabels(InstrumentLabels mode, bool first) =>
+    mode == InstrumentLabels.first ? first : mode == InstrumentLabels.page;
+
+double _systemLabelMargin(
+    StaffSystemLayout layout, InstrumentLabels mode, bool first) {
+  if (!_showLabels(mode, first)) return 0;
+  var width = 0.0;
+  var start = 0;
+  while (start < layout.source.staves.length) {
+    final label = layout.source.staves[start].metadata.instrument;
+    if (label == null || label.trim().isEmpty) {
+      start++;
+      continue;
+    }
+    var end = start;
+    while (end + 1 < layout.source.staves.length &&
+        layout.source.staves[end + 1].metadata.instrument == label) end++;
+    width = math.max(width, label.trim().runes.length * 0.65 + 1.0);
+    start = end + 1;
+  }
+  return width;
 }
 
 void _emitInstrumentLabels(
@@ -470,7 +517,7 @@ void _emitMeasureNumber(
   String color,
   String textFontFamily,
 ) {
-  b.writeln('<text x="${_n(x)}" y="${_n(y)}" '
+  b.writeln('<text data-number="$number" x="${_n(x)}" y="${_n(y)}" '
       'font-family="$textFontFamily" font-size="${_n(0.9 * staffSpace)}" '
       'text-anchor="start" fill="$color" stroke="none">$number</text>');
 }

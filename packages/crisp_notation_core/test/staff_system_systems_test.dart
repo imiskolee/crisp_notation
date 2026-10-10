@@ -106,6 +106,46 @@ void main() {
     expect(ragged.systems.first.layout.width, lessThan(40));
   });
 
+  test('justifies a non-final single-measure system by spacing notes', () {
+    final document = StaffSystem([
+      Score.simple(
+        timeSignature: TimeSignature.fourFour,
+        notes: 'c4:q d4 e4 f4 | c4:w',
+      ),
+    ]);
+    final ragged = layoutStaffSystemSystems(document, settings,
+        maxWidth: 40, justify: false, systemBreaks: {1});
+    final justified = layoutStaffSystemSystems(document, settings,
+        maxWidth: 40, systemBreaks: {1});
+    final raggedNotes = ragged.systems.first.layout.staves.first.primitives
+        .whereType<GlyphPrimitive>()
+        .where((g) => g.smuflName.startsWith('notehead'))
+        .map((g) => g.position.x)
+        .toList();
+    final justifiedNotes = justified
+        .systems.first.layout.staves.first.primitives
+        .whereType<GlyphPrimitive>()
+        .where((g) => g.smuflName.startsWith('notehead'))
+        .map((g) => g.position.x)
+        .toList();
+    expect(justified.systems, hasLength(2));
+    expect(justified.systems.first.lastMeasure, 0);
+    expect(ragged.systems.first.layout.width, lessThan(40));
+    expect(justified.systems.first.layout.width, closeTo(40, 0.05));
+    expect(justifiedNotes, hasLength(4));
+    expect(justifiedNotes.first, closeTo(raggedNotes.first, 1e-6));
+    final stretch = (justifiedNotes[1] - justifiedNotes.first) /
+        (raggedNotes[1] - raggedNotes.first);
+    expect(stretch, greaterThan(1));
+    for (var i = 1; i < justifiedNotes.length; i++) {
+      expect(justifiedNotes[i] - justifiedNotes.first,
+          closeTo((raggedNotes[i] - raggedNotes.first) * stretch, 1e-6));
+    }
+    expect(justified.systems.last.layout.width,
+        closeTo(ragged.systems.last.layout.width, 1e-6));
+    expect(justified.systems.last.layout.width, lessThan(40));
+  });
+
   test('a wide maxWidth keeps everything on one system', () {
     final one =
         layoutStaffSystemSystems(eightBarTrio(), settings, maxWidth: 400);

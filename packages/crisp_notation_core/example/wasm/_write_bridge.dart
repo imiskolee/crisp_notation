@@ -1,4 +1,4 @@
-﻿import "dart:io";
+import "dart:io";
 void main() {
   final code = """
 library;
@@ -198,6 +198,8 @@ String _renderScoreToSvg(
   final ScoreLayout layout;
   if (score.staffType == StaffType.jianpu) {
     layout = const JianpuLayoutEngine().layout(score, settings);
+  } else if (score.staffType == StaffType.tablature) {
+    layout = const TabLayoutEngine().layout(score, Tuning.standardGuitar, settings);
   } else {
     layout = const LayoutEngine().layout(score, settings);
   }

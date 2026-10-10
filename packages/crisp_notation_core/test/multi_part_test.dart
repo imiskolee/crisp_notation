@@ -56,6 +56,34 @@ void main() {
     });
   });
 
+  test('MusicXML staff order follows part-list order', () {
+    const xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P2"><part-name>Lower</part-name></score-part>
+    <score-part id="P1"><part-name>Upper</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>F</sign><line>4</line></clef></attributes>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>''';
+
+    final system = staffSystemFromMusicXml(xml);
+    final first = system.staves[0].measures[0].elements.single as NoteElement;
+    final second = system.staves[1].measures[0].elements.single as NoteElement;
+
+    expect(first.pitches.single, const Pitch(Step.c, octave: 3));
+    expect(second.pitches.single, const Pitch(Step.c, octave: 5));
+  });
   group('MultiPartScore', () {
     test('exposes its parts and shared measure count', () {
       final doc = quartet();

@@ -14,6 +14,7 @@ library;
 import 'dart:math';
 
 import '../model/element.dart';
+import '../model/measure.dart';
 import '../model/score.dart';
 import '../smufl/glyph_names.dart';
 import '../smufl/smufl_metadata.dart';
@@ -66,6 +67,9 @@ class TabLayoutEngine {
     bool showTuning = false,
     double? leadingWidth,
     List<double>? barlineXs,
+    List<double>? measureWidths,
+    List<Map<Fraction, double>>? forcedColumns,
+    bool finalBarline = false,
   }) {
     final n = tuning.stringCount;
     final s = settings;
@@ -125,9 +129,16 @@ class TabLayoutEngine {
       final startX = x;
       final cols = <_Col>[];
       var onset = Fraction.zero;
+      final forced = forcedColumns != null && m < forcedColumns.length
+          ? forcedColumns[m]
+          : null;
       for (var i = 0; i < measure.elements.length; i++) {
         final element = measure.elements[i];
         final dur = measure.effectiveDurationAt(i);
+        // 强制对齐 onset 位置（总谱混排时让 TAB 音符和其他 staff 的音符对齐）
+        if (forced != null && forced[onset] != null) {
+          x = startX + forced[onset]!;
+        }
         if (element is! NoteElement) {
           cols.add(_Col(x, element.duration, onset, true));
           x += _advance(element.duration, s);
@@ -208,8 +219,20 @@ class TabLayoutEngine {
         onset += dur;
       }
       measureCols.add(cols);
+      final sharedEnd = forced == null || forced.isEmpty
+          ? null
+          : forced.keys.reduce((a, b) => a > b ? a : b);
+      final measureWidth = measureWidths != null && m < measureWidths.length
+          ? measureWidths[m]
+          : null;
+      final forcedEnd = sharedEnd == null ? null : startX + forced![sharedEnd]!;
       x = max(x, startX + 2.0);
-      // Pin the barline to the paired staff's absolute position, when asked.
+      if (measureWidth != null) x = max(x, startX + measureWidth);
+      if (forcedEnd != null) {
+        // 直接赋值而非 max：forced[measureEnd] 是跨 staff 对齐的权威值，
+        // 内部 advance 只是估算，密集节奏下必过冲。
+        x = forcedEnd;
+      }
       if (barlineXs != null && m < barlineXs.length) {
         x = max(x, barlineXs[m]);
       }
@@ -220,7 +243,23 @@ class TabLayoutEngine {
         Point(barX, bottomY),
         thickness: s.thinBarlineThickness,
       ));
-      x = barX + s.barlineGap;
+      if (measure.barline == BarlineStyle.finalBar ||
+          (finalBarline &&
+              m == score.measures.length - 1 &&
+              measure.barline == BarlineStyle.normal)) {
+        final thickX = barX +
+            s.thinBarlineThickness / 2 +
+            s.barlineSeparation +
+            s.thickBarlineThickness / 2;
+        primitives.add(LinePrimitive(
+          Point(thickX, 0),
+          Point(thickX, bottomY),
+          thickness: s.thickBarlineThickness,
+        ));
+        x = thickX + s.thickBarlineThickness / 2 + s.barlineGap;
+      } else {
+        x = barX + s.thinBarlineThickness + s.barlineGap;
+      }
     }
 
     final width = x;

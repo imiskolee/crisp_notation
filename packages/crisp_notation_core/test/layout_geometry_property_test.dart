@@ -123,6 +123,46 @@ void main() {
     }
   }
 
+  test('a fixed 128-measure score has deterministic bounded geometry', () {
+    final bars = List.generate(128, (i) {
+      return switch (i % 4) {
+        0 => 'c4:s d4 e4 f4 g4 a4 b4 c5 d5 e5 f5 g5 a5 b5 c6 d6',
+        1 => 'c2+g2+c3:e r:e d6+a6:q e3:h',
+        2 => 'r:q c8:e b7 a0:e g0:q f4:q',
+        _ => 'c#4:q. d-5:e e4+g4+b4:h',
+      };
+    }).join(' | ');
+    final score = Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      notes: bars,
+    );
+
+    final first = engine.layout(score, settings);
+    final second = engine.layout(score, settings);
+    String fingerprint(ScoreLayout layout) => [
+          layout.width,
+          layout.height,
+          ...layout.primitives.map((p) => p.toString()),
+          ...layout.regions.map((r) => r.toString()),
+        ].join('\n');
+
+    expect(first.measureRegions, hasLength(128));
+    expect(fingerprint(second), fingerprint(first));
+    expect(first.width, predicate<double>((v) => v.isFinite && v > 0));
+    expect(first.height, predicate<double>((v) => v.isFinite && v > 0));
+    for (var i = 0; i < first.measureRegions.length; i++) {
+      final region = first.measureRegions[i];
+      expect(region.startX, lessThan(region.endX), reason: 'measure $i');
+      if (i > 0) {
+        expect(region.startX, closeTo(first.measureRegions[i - 1].endX, 1e-9),
+            reason: 'measure $i');
+      }
+    }
+    for (final region in first.regions) {
+      expect(first.bounds.containsRectangle(region.bounds), isTrue,
+          reason: region.elementId);
+    }
+  });
   test('layout + SVG stay finite and crash-free over 250 stressed scores', () {
     final rng = Random(20260717);
     for (var seed = 0; seed < 250; seed++) {

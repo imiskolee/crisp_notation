@@ -3,12 +3,15 @@ library;
 
 import 'dart:math';
 
+import '../model/element.dart';
 import '../model/score.dart';
 import '../theory/fraction.dart';
+import '../theory/tuning.dart';
 import 'jianpu_layout.dart';
 import 'layout_engine.dart';
 import 'layout_settings.dart';
 import 'score_layout.dart';
+import 'tab_layout.dart';
 
 /// Lays out one staff of a multi-staff system, routing to the engine the
 /// score's [StaffType] picks. Jianpu takes the column-alignment contract
@@ -40,11 +43,28 @@ ScoreLayout layoutStaff(
       leadingWidth: leadingWidth,
       measureWidths: measureWidths,
       forcedColumns: forcedColumns,
+      barlineXs: targetWidth == null
+          ? null
+          : [targetWidth - settings.thinBarlineThickness / 2],
       spacingStretch: spacingStretch,
       // 简谱不画行首的 "1=X 4/4"：调号标签本就不传（默认 false），拍号在
       // 这里也压掉。曲中变调/变拍由引擎无条件标出，不受此影响。
       drawTimeSignature: false,
       finalBarline: finalBarline,
+    );
+  }
+  if (score.staffType == StaffType.tablature) {
+    return const TabLayoutEngine().layout(
+      score,
+      Tuning.standardGuitar,
+      settings,
+      finalBarline: finalBarline,
+      leadingWidth: leadingWidth,
+      measureWidths: measureWidths,
+      forcedColumns: forcedColumns,
+      barlineXs: targetWidth == null
+          ? null
+          : [targetWidth - settings.thinBarlineThickness / 2],
     );
   }
   return const LayoutEngine().layout(
@@ -80,122 +100,248 @@ List<Map<Fraction, double>> alignedColumns(
   LayoutSettings settings, {
   double spacingStretch = 1.0,
 }) {
-  if (staves.isEmpty) return const [];
-  // Natural per-staff layouts give each element's ink split into the part left
-  // of its anchor (accidental) and right of it (notehead/stem/dots — or, for
-  // jianpu, the digit's 增时线/附点 train), so the column x can be the anchor
-  // position (accidental-aware). Each staff routes to its own engine: the
-  // staff engine's ink knows nothing of jianpu dashes, which would otherwise
-  // overflow the next column (dash drawn through the next digit).
-  final natural = [
-    for (final score in staves)
-      layoutStaff(score, settings,
-          leadingWidth: null,
-          measureWidths: null,
-          forcedColumns: null,
-          spacingStretch: spacingStretch,
-          drawTimeSignature: true,
-          finalBarline: true)
-  ];
+  final timeline = _collectTimeline(staves);
+  if (timeline.isEmpty) return const [];
   final ink = [
-    for (var i = 0; i < natural.length; i++)
-      _inkMetrics(natural[i], isJianpu: staves[i].staffType == StaffType.jianpu)
+    for (final score in staves)
+      _inkMetrics(
+        layoutStaff(score, settings,
+            leadingWidth: null,
+            measureWidths: null,
+            forcedColumns: null,
+            spacingStretch: 1,
+            drawTimeSignature: true,
+            finalBarline: true),
+        settings,
+        isJianpu: score.staffType == StaffType.jianpu,
+        isTab: score.staffType == StaffType.tablature,
+      ),
   ];
+  return [
+    for (final measure in timeline)
+      _mapTimeline(measure, staves, ink, settings, spacingStretch),
+  ];
+}
 
-  final measureCount = staves.first.measures.length;
-  final result = <Map<Fraction, double>>[];
-  for (var m = 0; m < measureCount; m++) {
-    // The widest left/right ink at each onset, across all staves and voices
-    // (voice 0 carries any tuplet adjustment; other voices use raw durations,
-    // matching the engine's multi-voice onset arithmetic).
-    final leftAt = <Fraction, double>{};
-    final rightAt = <Fraction, double>{};
-    var measureEnd = Fraction.zero;
+typedef _TimedEvent = ({
+  int staff,
+  MusicElement element,
+  Fraction start,
+  Fraction end,
+});
+
+typedef _MeasureTimeline = ({
+  Fraction start,
+  Fraction end,
+  List<_TimedEvent> events,
+  Set<Fraction> times,
+});
+
+List<_MeasureTimeline> _collectTimeline(List<Score> staves) {
+  if (staves.isEmpty) return const [];
+  final result = <_MeasureTimeline>[];
+  var start = Fraction.zero;
+  for (var m = 0; m < staves.first.measures.length; m++) {
+    final events = <_TimedEvent>[];
+    var contentEnd = start;
+    var noteEnd = start;
     for (var si = 0; si < staves.length; si++) {
       final measure = staves[si].measures[m];
-      final voices = measure.voices;
+      final voices = [
+        measure.elements,
+        measure.voice2,
+        measure.voice3,
+        measure.voice4,
+      ];
       for (var v = 0; v < voices.length; v++) {
-        var onset = Fraction.zero;
+        var onset = start;
         for (var i = 0; i < voices[v].length; i++) {
-          final id = voices[v][i].id;
-          final metric = id == null ? null : ink[si][id];
-          final l = metric?.left ?? 0.0;
-          final r = metric?.right ?? 1.0;
-          leftAt[onset] = max(leftAt[onset] ?? 0.0, l);
-          rightAt[onset] = max(rightAt[onset] ?? 0.0, r);
-          onset += v == 0
-              ? measure.effectiveDurationAt(i)
-              : voices[v][i].duration.toFraction();
+          final element = voices[v][i];
+          final duration = measure.effectiveDurationAt(i, voice: v);
+          final end = onset + duration;
+          events.add((staff: si, element: element, start: onset, end: end));
+          onset = end;
+          if (element is NoteElement && duration > Fraction.zero) {
+            if (onset > noteEnd) noteEnd = onset;
+          }
         }
-        if (onset > measureEnd) measureEnd = onset;
+        if (onset > contentEnd) contentEnd = onset;
       }
     }
-
-    final onsets = leftAt.keys.toList()..sort((a, b) => a.compareTo(b));
-    final columns = <Fraction, double>{};
-    // The first column leaves room for its own left ink (accidental) after the
-    // measure's content start.
-    var x = onsets.isEmpty ? 0.0 : (leftAt[onsets.first] ?? 0.0);
-    for (var k = 0; k < onsets.length; k++) {
-      columns[onsets[k]] = x;
-      final next = k + 1 < onsets.length ? onsets[k + 1] : measureEnd;
-      final ideal =
-          _idealAdvanceFor(next - onsets[k], settings, spacingStretch);
-      // Never let this column's right ink collide with the next column's left
-      // ink (its accidental), and never let an engine's own advance overrun
-      // the next column (jianpu dashes/lyrics at the measure end).
-      final nextLeft =
-          k + 1 < onsets.length ? (leftAt[onsets[k + 1]] ?? 0.0) : 0.0;
-      final collision =
-          (rightAt[onsets[k]] ?? 0.0) + nextLeft + settings.minNoteGap;
-      x += max(ideal, collision);
+    final capacity = _sharedMeasureCapacity(staves, m);
+    final capacityEnd = start + capacity.length;
+    final end = capacity.hasExplicitDuration ||
+            contentEnd >= capacityEnd ||
+            contentEnd == start ||
+            (noteEnd < contentEnd && contentEnd < capacityEnd)
+        ? capacityEnd
+        : contentEnd;
+    final times = <Fraction>{start, end};
+    for (final event in events) {
+      for (final time in [event.start, event.end]) {
+        if (time >= start && time <= end) times.add(time);
+      }
     }
-    columns[measureEnd] = x; // the closing-barline column
-    result.add(columns);
+    result.add((start: start, end: end, events: events, times: times));
+    start = end;
   }
   return result;
 }
 
-/// Per-element ink split about its anchor x, from a natural [layout]:
-/// `left` = accidental (anchor x − ink left), `right` = notehead/stem/dots
-/// (ink right − anchor x). The anchor is the notehead for staff notation;
-/// jianpu elements have no notehead glyph, so their anchor is the digit (or
-/// first "0" of a long rest) text centre — the jianpu notehead analogue that
-/// aligns with a staff notehead at the same onset. Elements with neither
-/// anchor at their ink left.
+Map<Fraction, double> _mapTimeline(
+  _MeasureTimeline measure,
+  List<Score> staves,
+  List<Map<String, ({double anchor, double left, double right})>> ink,
+  LayoutSettings settings,
+  double spacingStretch,
+) {
+  final times = measure.times.toList()..sort();
+  final bounds = [
+    for (var si = 0; si < staves.length; si++)
+      <Fraction, ({double left, double right})>{},
+  ];
+  final groups = <(int, Fraction), List<_TimedEvent>>{};
+  for (final event in measure.events) {
+    if (event.start < measure.start || event.start >= measure.end) continue;
+    final centered = staves[event.staff].staffType == StaffType.standard &&
+        event.element is RestElement &&
+        event.start == measure.start &&
+        event.end == measure.end;
+    final elementId = event.element.id;
+    if (centered || elementId == null || ink[event.staff][elementId] == null) {
+      continue;
+    }
+    groups.putIfAbsent((event.staff, event.start), () => []).add(event);
+  }
+  var padding = 0.0;
+  for (final entry in groups.entries) {
+    final metrics = [
+      for (final event in entry.value) ink[event.staff][event.element.id]!,
+    ];
+    final anchor = metrics.map((metric) => metric.anchor).reduce(min);
+    final left = metrics
+        .map((metric) => metric.left - (metric.anchor - anchor))
+        .reduce(max);
+    final right = metrics
+        .map((metric) => metric.right + metric.anchor - anchor)
+        .reduce(max);
+    final time = entry.key.$2 - measure.start;
+    bounds[entry.key.$1][time] = (left: max(0, left), right: max(0, right));
+    if (time == Fraction.zero) padding = max(padding, left);
+  }
+  var x = padding;
+  final columns = <Fraction, double>{times.first - measure.start: x};
+  for (var i = 1; i < times.length; i++) {
+    final from = times[i - 1] - measure.start;
+    final to = times[i] - measure.start;
+    var right = 0.0;
+    var left = 0.0;
+    for (final staff in bounds) {
+      right = max(right, staff[from]?.right ?? 0);
+      left = max(left, staff[to]?.left ?? 0);
+    }
+    final advance = max(
+      _idealAdvanceFor(to - from, settings, 1),
+      right + left + settings.minNoteGap,
+    );
+    x += advance * spacingStretch;
+    columns[to] = x;
+  }
+  return columns;
+}
+
 Map<String, ({double anchor, double left, double right})> _inkMetrics(
-    ScoreLayout layout,
-    {bool isJianpu = false}) {
-  final headX = <String, double>{};
-  final digitX = <String, double>{};
+  ScoreLayout layout,
+  LayoutSettings settings, {
+  bool isJianpu = false,
+  bool isTab = false,
+}) {
+  final anchors = <String, double>{};
+  final left = <String, double>{};
+  final right = <String, double>{};
   for (final primitive in layout.primitives) {
     final id = primitive.elementId;
     if (id == null) continue;
     if (primitive is GlyphPrimitive &&
-        primitive.smuflName.startsWith('notehead')) {
-      headX.putIfAbsent(id, () => primitive.position.x);
+        (primitive.smuflName.startsWith('notehead') ||
+            primitive.smuflName.startsWith('rest'))) {
+      anchors.putIfAbsent(id, () => primitive.position.x);
     } else if (primitive is TextPrimitive &&
-        primitive.text.length == 1 &&
-        primitive.text.codeUnitAt(0) >= 0x30 &&
-        primitive.text.codeUnitAt(0) <= 0x37) {
-      // '0'..'7' — a jianpu digit/rest. First unit anchors a long rest.
-      digitX.putIfAbsent(id, () => primitive.position.x);
+        ((isJianpu && RegExp(r'^[0-7]$').hasMatch(primitive.text)) ||
+            (isTab &&
+                RegExp(r'^(?:-?\d{1,2}|\(\d{1,2}\)|<\d{1,2}>|x)$')
+                    .hasMatch(primitive.text)))) {
+      anchors.putIfAbsent(id, () => primitive.position.x);
     }
   }
-  final out = <String, ({double anchor, double left, double right})>{};
-  for (final region in layout.regions) {
-    final b = region.bounds;
-    final anchor =
-        headX[region.elementId] ?? digitX[region.elementId] ?? b.left;
-    final left = anchor - b.left;
-    final right = b.right - anchor;
-    out[region.elementId] = (
-      anchor: anchor,
-      left: isJianpu ? min(left, 0.45) : left,
-      right: isJianpu ? min(right, 0.45) : right
-    );
+  for (final primitive in layout.primitives) {
+    final id = primitive.elementId;
+    if (id == null) continue;
+    double l;
+    double r;
+    if (primitive is GlyphPrimitive) {
+      final box = settings.metadata.bBoxOf(primitive.smuflName);
+      l = primitive.position.x + box.swX * primitive.scale;
+      r = primitive.position.x + box.neX * primitive.scale;
+    } else if (primitive is TextPrimitive) {
+      if (isJianpu &&
+          anchors[id] != primitive.position.x &&
+          primitive.text == '0') {
+        continue;
+      }
+      final half = isJianpu && RegExp(r'^[0-7]$').hasMatch(primitive.text)
+          ? 0.225 * primitive.size
+          : 0.28 * primitive.size * primitive.text.length;
+      l = primitive.position.x - half;
+      r = primitive.position.x + half;
+    } else if (primitive is LinePrimitive) {
+      if (isJianpu && primitive.from.y == primitive.to.y) continue;
+      l = min(primitive.from.x, primitive.to.x) - primitive.thickness / 2;
+      r = max(primitive.from.x, primitive.to.x) + primitive.thickness / 2;
+    } else {
+      continue;
+    }
+    left[id] = min(left[id] ?? l, l);
+    right[id] = max(right[id] ?? r, r);
   }
-  return out;
+  return {
+    for (final entry in anchors.entries)
+      entry.key: (
+        anchor: entry.value,
+        left: max(0, entry.value - (left[entry.key] ?? entry.value)),
+        right: max(0, (right[entry.key] ?? entry.value) - entry.value)
+      ),
+  };
+}
+
+({Fraction length, bool hasExplicitDuration}) _sharedMeasureCapacity(
+  List<Score> staves,
+  int measureIndex,
+) {
+  var length = Fraction.zero;
+  var hasExplicitDuration = false;
+
+  for (final score in staves) {
+    if (measureIndex >= score.measures.length) continue;
+
+    var meter = score.timeSignature;
+    for (var i = 0; i <= measureIndex; i++) {
+      final change = score.measures[i].timeChange;
+      if (change != null) meter = change;
+    }
+
+    final measure = score.measures[measureIndex];
+    final capacity = measure.capacityGiven(meter);
+    if (capacity != null && capacity > length) {
+      length = capacity;
+    }
+    if (measure.actualDuration != null) hasExplicitDuration = true;
+  }
+
+  return (
+    length: length == Fraction.zero ? Fraction(1, 1) : length,
+    hasExplicitDuration: hasExplicitDuration,
+  );
 }
 
 /// The optical time-based spacing for an onset gap of [delta] (mirrors the

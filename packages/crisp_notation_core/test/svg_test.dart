@@ -111,6 +111,20 @@ void main() {
     expect(scoreToSvg(layout), scoreToSvg(layout));
   });
 
+  test('measure numbers expose their value as data-number', () {
+    final score = Score.simple(
+      timeSignature: TimeSignature.fourFour,
+      notes: 'c4:q d4 e4 f4 | g4:q a4 b4 c5',
+    );
+    final multi = layoutSystems(score, settings, maxWidth: 20);
+    final svg = systemsToSvg(
+      multi,
+      showSystemMeasureNumbers: true,
+      numberFirstSystem: true,
+    );
+    expect(svg, contains('data-number="1"'));
+  });
+
   group('grandStaffToSvg', () {
     GrandStaffLayout gsLayout() => layoutGrandStaff(
           GrandStaff(

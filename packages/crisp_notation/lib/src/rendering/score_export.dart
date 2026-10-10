@@ -19,15 +19,17 @@ import 'theme.dart';
 
 const LayoutEngine _engine = LayoutEngine();
 const JianpuLayoutEngine _jianpuEngine = JianpuLayoutEngine();
+const TabLayoutEngine _tabEngine = TabLayoutEngine();
 const _defaultTextFontFamily =
     "Academico, 'New York', 'Times New Roman', Times, serif";
 
-/// The single-score layout pass, routed by [Score.staffType]
-/// (docs/JIANPU.md §5) — jianpu through the numbered-notation engine,
-/// everything else through the staff engine.
+/// The single-score layout pass, routed by [Score.staffType]: standard through
+/// the staff engine, jianpu through the numbered-notation engine, tablature
+/// through the tab engine (default standard guitar tuning).
 ScoreLayout _layoutScore(Score score, LayoutSettings settings) =>
     switch (score.staffType) {
       StaffType.jianpu => _jianpuEngine.layout(score, settings),
+      StaffType.tablature => _tabEngine.layout(score, Tuning.standardGuitar, settings),
       _ => _engine.layout(score, settings),
     };
 

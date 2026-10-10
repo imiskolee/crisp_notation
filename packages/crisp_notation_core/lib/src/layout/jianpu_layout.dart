@@ -268,8 +268,7 @@ class JianpuLayoutEngine {
       final naturalAlter = key.alterFor(step);
       for (var delta = -1; delta <= 1; delta++) {
         final oct = pitch.octave + delta;
-        final naturalMidi =
-            (oct + 1) * 12 + step.semitonesFromC + naturalAlter;
+        final naturalMidi = (oct + 1) * 12 + step.semitonesFromC + naturalAlter;
         if (naturalMidi != midi) continue;
         if (step == pitch.step && naturalAlter == pitch.alter && delta == 0) {
           return pitch;
@@ -539,7 +538,10 @@ class _JianpuBuilder {
           digitX = r.digitX;
           columnBottom = r.columnBottom;
         } else {
-          renderRestElement(duration, digitX, id);
+          renderRestElement(duration, digitX, id,
+              positionColumns: columns,
+              measureOrigin: measureContentStart,
+              noteOnset: onset);
         }
 
         cols.add(_Col(digitX, duration, onset,
@@ -555,7 +557,10 @@ class _JianpuBuilder {
         final isLongRest = element is! NoteElement &&
             JianpuLayoutEngine._longRestQuarterUnits(duration) > 1;
         if (!isLongRest) {
-          renderDurationMarks(digitX, dashes, augDots, id);
+          renderDurationMarks(digitX, dashes, augDots, id,
+              positionColumns: columns,
+              measureOrigin: measureContentStart,
+              noteOnset: onset);
         }
 
         final lyric = id == null ? null : lyricOf[id];
@@ -579,11 +584,13 @@ class _JianpuBuilder {
         onset += effective;
       }
 
-      // §2.9: advance to the shared measure-end column.
+      // §2.9: the shared measure-end column is authoritative — assign rather
+      // than max, so the engine's natural advance cannot overrun the grid
+      // (dense advance estimates, or overflowing rhythm errors).
       if (columns != null && columns.isNotEmpty) {
         final measureEnd = columns.keys.reduce((a, b) => a > b ? a : b);
         final endX = columns[measureEnd];
-        if (endX != null) x = max(x, measureContentStart + endX);
+        if (endX != null) x = measureContentStart + endX;
       }
 
       // 减时线.

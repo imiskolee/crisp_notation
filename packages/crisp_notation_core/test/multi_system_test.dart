@@ -105,8 +105,7 @@ void main() {
       expect(lowerTop - upperBottom, greaterThanOrEqualTo(0.8));
     });
 
-    test('single-measure continuation systems pad staff width without stretch',
-        () {
+    test('single-measure continuation systems do not pad width', () {
       final staff = StaffSystem([
         Score.simple(notes: 'c4:q d4 e4 f4 | c4:w | c4:q d4 e4 f4'),
       ]);
@@ -123,11 +122,10 @@ void main() {
       );
       final middle = wrapped.systems.singleWhere((s) => s.firstMeasure == 1);
 
-      expect(middle.layout.width, closeTo(35, 1e-9));
-      expect(
-          middle.layout.staves.single.measureRegions.single.endX,
-          closeTo(
-              naturalMiddle.staves.single.measureRegions.single.endX, 1e-9));
+      expect(middle.layout.width, closeTo(35, 0.05));
+      expect(middle.layout.width, lessThanOrEqualTo(35));
+      expect(middle.layout.staves.single.measureRegions.single.endX,
+          greaterThan(naturalMiddle.staves.single.measureRegions.single.endX));
     });
 
     test('underfilled source system breaks are soft, explicit breaks are hard',

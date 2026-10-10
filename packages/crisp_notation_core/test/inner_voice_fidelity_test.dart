@@ -44,6 +44,18 @@ Score through(String format, Score s) => switch (format) {
     };
 
 void main() {
+  test('voice2Duration uses the actual duration of inner-voice tuplets', () {
+    final measure = Measure(
+      [n(72, 'outer')],
+      voice2: [n(60, 'a'), n(62, 'b'), n(64, 'c')],
+      tuplets: const [
+        TupletSpan(0, 2, actual: 3, normal: 2, voice: 1),
+      ],
+    );
+
+    expect(measure.voice2Duration, Fraction(1, 4));
+  });
+
   const formats = ['mei', 'musescore', 'musicxml', 'abc'];
 
   group('a tuplet in an inner voice', () {

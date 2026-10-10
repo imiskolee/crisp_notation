@@ -596,6 +596,10 @@ class _LayoutBuilder {
             ? forcedColumns![measureIndex]
             : null;
     final measureContentStart = _x;
+    // An empty column map (empty measure) behaves like no grid.
+    final gridMeasureEnd = columns == null || columns.isEmpty
+        ? null
+        : columns.keys.reduce((a, b) => a > b ? a : b);
     var onset = Fraction.zero;
 
     for (var i = 0; i < measure.elements.length; i++) {
@@ -604,11 +608,20 @@ class _LayoutBuilder {
       tieIndexOf[i] = _tieInfos.length;
       // The grid column x is the notehead position (accidental-aware): the
       // note anchors its head there via noteXOverride and its accidental
-      // extends left; a rest anchors its ink there via _x.
+      // extends left; a rest anchors its ink there via _x. A rest that fills
+      // the whole measure, though, is centered in the grid-fixed measure
+      // (standard engraving rule), not pinned to the onset-0 column.
       final columnX = columns == null ? null : columns[onset];
-      if (columnX != null) _x = measureContentStart + columnX;
+      final centerRest = columns != null &&
+          element is RestElement &&
+          element.duration.toFraction() == gridMeasureEnd;
+      if (centerRest) {
+        _x = measureContentStart + columns[gridMeasureEnd]! / 2;
+      } else if (columnX != null) {
+        _x = measureContentStart + columnX;
+      }
       _applyInlineClefs(measure, onset);
-      final columnNoteX = columnX == null ? null : _x;
+      final columnNoteX = centerRest || columnX == null ? null : _x;
       onset += measure.effectiveDurationAt(i);
       switch (element) {
         case NoteElement():
@@ -641,7 +654,14 @@ class _LayoutBuilder {
           );
         case RestElement():
           final result = _layoutRest(element);
-          _advance(result.noteX, result.inkRight, element.duration, log2Adjust);
+          if (centerRest) {
+            // Nothing follows; pin straight to the grid's closing column so
+            // the advance estimate cannot overrun the fixed measure.
+            _x = measureContentStart + columns[gridMeasureEnd]!;
+          } else {
+            _advance(
+                result.noteX, result.inkRight, element.duration, log2Adjust);
+          }
       }
     }
 
@@ -654,7 +674,7 @@ class _LayoutBuilder {
     if (columns != null && columns.isNotEmpty) {
       final measureEnd = columns.keys.reduce((a, b) => a > b ? a : b);
       final endX = columns[measureEnd];
-      if (endX != null) _x = max(_x, measureContentStart + endX);
+      if (endX != null) _x = measureContentStart + endX;
     }
 
     for (final group in groups) {
@@ -690,6 +710,9 @@ class _LayoutBuilder {
         ? forcedColumns![measureIndex]
         : null;
     final measureContentStart = _x;
+    final gridMeasureEnd = forced == null || forced.isEmpty
+        ? null
+        : forced.keys.reduce((a, b) => a > b ? a : b);
     // `Measure.voices` is a COMPACTING view — it drops empty voices — while
     // `effectiveDurationAt` and `TupletSpan.voice` take the ABSOLUTE voice
     // number. The two disagree the moment a voice is empty: with nothing in
@@ -817,7 +840,8 @@ class _LayoutBuilder {
           }
           if (jointShown.isNotEmpty) {
             final acc = _accidentalColumns(jointShown);
-            columnNoteX = columnX + acc.preWidth;
+            columnNoteX =
+                forced?[onset] == null ? columnX + acc.preWidth : columnX;
             _drawAccidentalColumns(acc, columnNoteX);
           }
         }
@@ -859,7 +883,8 @@ class _LayoutBuilder {
                       (cm != null ? _crossBeamStemsDown[cm] : v.isOdd)),
               deferStem: crossStaff || cm != null || group != null,
               voice: v,
-              noteXOverride: columnNoteX,
+              noteXOverride:
+                  columnNoteX ?? (forced?[onset] == null ? null : _x),
             );
             if (crossStaff) {
               _recordCrossStaffStub(element.id, result.beamed);
@@ -875,24 +900,38 @@ class _LayoutBuilder {
             idealEnd = max(idealEnd, result.noteX + _idealAdvance(delta));
             inkRight = max(inkRight, result.inkRight);
           case RestElement():
-            // Stagger rests away from the staff centre: voice 1 up, 2 down,
-            // 3 further up, 4 further down.
-            final magnitude = (v ~/ 2 + 1).toDouble();
-            final result = _layoutRest(
-              element,
-              voice: v,
-              yOffset: v.isEven ? -magnitude : magnitude,
-            );
-            idealEnd = max(idealEnd, result.noteX + _idealAdvance(delta));
-            inkRight = max(inkRight, result.inkRight);
+            final fullRest = gridMeasureEnd != null &&
+                onset == Fraction.zero &&
+                effectiveAt(v, i) == gridMeasureEnd;
+            if (fullRest) {
+              // Whole-measure rest in this voice: centered in the grid-fixed
+              // measure at its normal (unstaggered) vertical position.
+              _x = measureContentStart + forced![gridMeasureEnd]! / 2;
+              final result = _layoutRest(element, voice: v);
+              idealEnd =
+                  max(idealEnd, measureContentStart + forced[gridMeasureEnd]!);
+              inkRight = max(inkRight, result.inkRight);
+            } else {
+              // Stagger rests away from the staff centre: voice 1 up, 2 down,
+              // 3 further up, 4 further down.
+              final magnitude = (v ~/ 2 + 1).toDouble();
+              final result = _layoutRest(
+                element,
+                voice: v,
+                yOffset: v.isEven ? -magnitude : magnitude,
+              );
+              idealEnd = max(idealEnd, result.noteX + _idealAdvance(delta));
+              inkRight = max(inkRight, result.inkRight);
+            }
         }
       }
       _x = max(idealEnd, inkRight + s.minNoteGap);
     }
 
     // The shared measure-end column fixes the trailing width so barlines align.
-    if (forced != null && forced[measureEnd] != null) {
-      _x = max(_x, measureContentStart + forced[measureEnd]!);
+    if (forced != null && forced.isNotEmpty) {
+      final sharedEnd = forced.keys.reduce((a, b) => a > b ? a : b);
+      _x = measureContentStart + forced[sharedEnd]!;
     }
 
     for (var v = 0; v < n; v++) {

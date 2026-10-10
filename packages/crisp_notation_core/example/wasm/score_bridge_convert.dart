@@ -16,6 +16,7 @@ class _RenderOptions {
   final String? author;
   final bool showTitle;
   final bool showAuthor;
+  final InstrumentLabels instrumentLabels;
 
   /// 'system' = a number at each system start, 'all' = every measure.
   final String measureNumbers;
@@ -42,6 +43,8 @@ class _RenderOptions {
         author = json['author'] as String?,
         showTitle = (json['showTitle'] as bool?) ?? true,
         showAuthor = (json['showAuthor'] as bool?) ?? true,
+        instrumentLabels =
+            _parseInstrumentLabels(json['instrumentLabels'] as String?),
         measureNumbers = (json['measureNumbers'] as String?) ?? 'system',
         pageSize = (json['pageSize'] as String?) ?? '',
         pageWidthPx = (json['pageWidthPx'] as num?)?.toDouble(),
@@ -86,6 +89,17 @@ class _RenderOptions {
   }
 }
 
+InstrumentLabels _parseInstrumentLabels(String? value) {
+  switch (value) {
+    case 'none':
+      return InstrumentLabels.none;
+    case 'page':
+      return InstrumentLabels.page;
+    default:
+      return InstrumentLabels.first;
+  }
+}
+
 String abcToSvg(String abcText, String bravuraMetaJson, String staffTypeName,
     [String optionsJson = '{}']) {
   try {
@@ -101,32 +115,12 @@ String abcToSvg(String abcText, String bravuraMetaJson, String staffTypeName,
             jsonDecode(optionsJson) as Map<String, dynamic>);
 
     final staffType = _parseStaffType(staffTypeName);
-    final system = staffSystemFromAbc(abcText);
-    if (system.staves.length > 1) {
-      return _renderStaffSystemToSvg(
-          _prepareSystem(system, staffType, opts), metadata, opts);
-    }
-
-    var score = scoreFromAbc(abcText);
-    if (staffType != StaffType.standard) {
-      score = score.copyWith(staffType: staffType);
-    }
-
-    if (opts.title != null ||
-        opts.author != null ||
-        !opts.showTitle ||
-        !opts.showAuthor) {
-      score = score.copyWith(
-        metadata: score.metadata.copyWith(
-          title:
-              _resolvedField(opts.showTitle, opts.title, score.metadata.title),
-          composer: _resolvedField(
-              opts.showAuthor, opts.author, score.metadata.composer),
-        ),
-      );
-    }
-
-    return _renderScoreToSvg(score, metadata, opts);
+    final system = _prepareSystem(
+      staffSystemFromAbc(abcText),
+      staffType,
+      opts,
+    );
+    return _renderStaffSystemToSvg(system, metadata, opts);
   } on FormatException catch (e) {
     return 'error: ${e.message}';
   } on Object catch (e) {
@@ -236,10 +230,18 @@ String _renderStaffSystemToSvg(
   if (maxWidth <= 0) maxWidth = 56.0;
 
   if (pageMm == null) {
+    final fullWidth = maxWidth +
+        (opts.instrumentLabels == InstrumentLabels.none ? 0.0 : leftMargin);
     final wrapped = layoutStaffSystemSystems(
       system,
       settings,
-      maxWidth: maxWidth,
+      maxWidth: fullWidth,
+      widthForSystem: (index) =>
+          fullWidth -
+          (_showInstrumentLabels(opts.instrumentLabels, index == 0)
+              ? leftMargin
+              : 0.0),
+      justify: true,
       showMeasureNumbers: showEveryMeasure,
     );
     return staffSystemSystemsToSvg(
@@ -247,7 +249,7 @@ String _renderStaffSystemToSvg(
       staffSpace: staffSpace,
       systemGap: systemGap,
       leftMargin: leftMargin,
-      showInstrumentLabels: true,
+      instrumentLabels: opts.instrumentLabels,
       showSystemMeasureNumbers: showSystemNumbers,
       numberFirstSystem: showSystemNumbers,
       showTitle: opts.showTitle,
@@ -266,7 +268,7 @@ String _renderStaffSystemToSvg(
   final pageHpx = opts.pageHeightPx ?? pageMm.h * 96 / 25.4;
   final padPx = opts.paddingPx;
   final padSs = padPx / staffSpace;
-  final contentWidthSs = pageWpx / staffSpace - 2 * padSs - leftMargin;
+  final fullContentWidthSs = pageWpx / staffSpace - 2 * padSs;
   final contentHeightSs = pageHpx / staffSpace - 2 * padSs;
 
   final metadataForTitle =
@@ -279,7 +281,15 @@ String _renderStaffSystemToSvg(
   final wrapped = layoutStaffSystemSystems(
     system,
     settings,
-    maxWidth: contentWidthSs > 0 ? contentWidthSs : 56.0,
+    maxWidth: fullContentWidthSs > 0 ? fullContentWidthSs : 56.0,
+    widthForSystem: (index) {
+      final fullWidth = fullContentWidthSs > 0 ? fullContentWidthSs : 56.0;
+      return fullWidth -
+          (_showInstrumentLabels(opts.instrumentLabels, index == 0)
+              ? leftMargin
+              : 0.0);
+    },
+    justify: true,
     showMeasureNumbers: showEveryMeasure,
   );
 
@@ -302,27 +312,41 @@ String _renderStaffSystemToSvg(
   if (current.isNotEmpty) pages.add(current);
 
   final numPages = pages.isEmpty ? 1 : pages.length;
-  final innerX = padPx + leftMargin * staffSpace;
 
   // One SVG per page, joined by a marker the frontend splits on — screen CSS
   // stacks the pages, print CSS breaks after each so every page prints whole.
   final b = StringBuffer();
+  var systemIndex = 0;
   for (var p = 0; p < numPages; p++) {
     if (p > 0) b.write('\n<!--crisp-page-->\n');
     b.write(_svgOpen(pageWpx, pageHpx, glyphFontFamily, 'none'));
     b.writeln('<rect x="0" y="0" width="${_n(pageWpx)}" '
         'height="${_n(pageHpx)}" fill="$background"/>');
     if (p == 0 && hasTitle) {
-      b.writeln('<g transform="translate(${_n(innerX)} ${_n(padPx)})">');
-      _emitTitleBlock(metadataForTitle, staffSpace,
-          contentWidthSs > 0 ? contentWidthSs : 56.0, color, textFontFamily, b);
+      b.writeln('<g transform="translate(${_n(padPx)} ${_n(padPx)})">');
+      _emitTitleBlock(
+          metadataForTitle,
+          staffSpace,
+          fullContentWidthSs > 0 ? fullContentWidthSs : 56.0,
+          color,
+          textFontFamily,
+          b);
       b.writeln('</g>');
     }
     if (p < pages.length) {
       var ySs = padSs + (p == 0 ? titleTopSs : 0.0);
       for (final line in pages[p]) {
         final layout = line.layout;
+        final showLabels =
+            _showInstrumentLabels(opts.instrumentLabels, systemIndex == 0);
+        final margin = showLabels ? leftMargin : 0.0;
+        final innerX = padPx + margin * staffSpace;
+        final baseY = ySs * staffSpace;
         final yPx = (ySs - layout.top) * staffSpace;
+        if (showLabels) {
+          _emitPagedInstrumentLabels(b, layout, staffSpace, padPx, baseY,
+              margin, color, textFontFamily);
+        }
         b.writeln('<g transform="translate(${_n(innerX)} ${_n(yPx)})">');
         if (showSystemNumbers) {
           // System-start bar number, same placement as
@@ -344,6 +368,7 @@ String _renderStaffSystemToSvg(
         )).content);
         b.writeln('</g>');
         ySs += layout.height + systemGap;
+        systemIndex++;
       }
     }
     b.writeln('</svg>');
@@ -351,9 +376,43 @@ String _renderStaffSystemToSvg(
   return b.toString();
 }
 
-/// The natural width of the widest part's first [n] measures plus the label
-/// margin — the multi-voice counterpart of [_probeWidthForMeasures], used to
-/// line-break at approximately N measures per system.
+bool _showInstrumentLabels(InstrumentLabels mode, bool first) =>
+    mode == InstrumentLabels.first ? first : mode == InstrumentLabels.page;
+
+void _emitPagedInstrumentLabels(
+  StringBuffer b,
+  StaffSystemLayout layout,
+  double staffSpace,
+  double contentX,
+  double baseY,
+  double leftMargin,
+  String color,
+  String textFontFamily,
+) {
+  var start = 0;
+  while (start < layout.source.staves.length) {
+    final label = layout.source.staves[start].metadata.instrument;
+    if (label == null || label.trim().isEmpty) {
+      start++;
+      continue;
+    }
+    var end = start;
+    while (end + 1 < layout.source.staves.length &&
+        layout.source.staves[end + 1].metadata.instrument == label) {
+      end++;
+    }
+    final top = layout.staffTop(start);
+    final bottom = layout.staffTop(end) + 4;
+    final x = contentX + (leftMargin - 1.0) * staffSpace;
+    final y = baseY + ((top + bottom) / 2 - layout.top) * staffSpace;
+    b.writeln('<text x="${_n(x)}" y="${_n(y)}" '
+        'font-family="$textFontFamily" font-size="${_n(1.1 * staffSpace)}" '
+        'text-anchor="end" dominant-baseline="middle" '
+        'fill="$color" stroke="none">${_escape(label)}</text>');
+    start = end + 1;
+  }
+}
+
 double _probeSystemWidthForMeasures(
     StaffSystem system, LayoutSettings settings, int n, double leftMargin) {
   var width = 0.0;
@@ -367,9 +426,7 @@ double _probeSystemWidthForMeasures(
       clef: part.clef,
       staffType: part.staffType,
     );
-    final layout = part.staffType == StaffType.jianpu
-        ? const JianpuLayoutEngine().layout(sub, settings)
-        : const LayoutEngine().layout(sub, settings);
+    final layout = layoutStaffSystemSingleLine(StaffSystem([sub]), settings);
     if (layout.width > width) width = layout.width;
   }
   return width + leftMargin + 4.0;
@@ -506,46 +563,6 @@ String _svgOpen(
   return (content: m.group(3)!, w: w, h: h);
 }
 
-double _probeWidthForMeasures(Score score, LayoutSettings settings, int n) {
-  if (score.measures.isEmpty) return 56.0;
-  final take = n < 1 ? score.measures.length : n;
-  final sub = Score(
-    measures: score.measures.sublist(0, take.clamp(1, score.measures.length)),
-    timeSignature: score.timeSignature,
-    keySignature: score.keySignature,
-    clef: score.clef,
-    staffType: score.staffType,
-  );
-  final layout = const LayoutEngine().layout(sub, settings);
-  return layout.width + 4.0;
-}
-
-List<List<SystemLayout>> _planPages(List<SystemLayout> systems,
-    double pageHStaffSpaces, double systemGap, double titleTopStaff) {
-  const footer = 3.0;
-  final pages = <List<SystemLayout>>[];
-  var cur = <SystemLayout>[];
-  var used = 0.0;
-  var avail = pageHStaffSpaces - titleTopStaff - footer;
-
-  for (final system in systems) {
-    final need =
-        cur.isEmpty ? system.layout.height : systemGap + system.layout.height;
-    if (cur.isNotEmpty && used + need > avail) {
-      pages.add(cur);
-      cur = [];
-      used = 0.0;
-      avail = pageHStaffSpaces - footer;
-    }
-    cur.add(system);
-    used += (cur.length == 1
-        ? system.layout.height
-        : systemGap + system.layout.height);
-  }
-  if (cur.isNotEmpty) pages.add(cur);
-  return pages;
-}
-
 double _titleBlockHeight(ScoreMetadata metadata) {
   final titles = (metadata.title ?? '')
       .split('\n')
@@ -572,195 +589,4 @@ double _titleBlockHeight(ScoreMetadata metadata) {
     }
   }
   return h + 0.8;
-}
-
-String _renderScoreToSvg(
-    Score score, SmuflMetadata metadata, _RenderOptions opts) {
-  final m = opts.spacingMultiplier();
-  final settings = LayoutSettings(
-    metadata: metadata,
-    spacingBase: 1.8 * m,
-    spacingPerLog2: 0.75 * m,
-    minNoteGap: 0.6 * m,
-  );
-
-  final staffSpace = opts.staffSpace;
-  final background = opts.resolveBackground();
-  const glyphFontFamily = 'Bravura';
-  const textFontFamily =
-      "Academico, 'New York', 'Times New Roman', Times, serif";
-  const color = '#1e232b';
-  const systemGap = 8.0;
-
-  final pageMm = opts.pageSizeMm();
-  final maxWidthFromPage = pageMm == null
-      ? null
-      : ((pageMm.w * 96 / 25.4) - opts.paddingPx * 2) / staffSpace;
-  final maxHeightFromPage = pageMm == null
-      ? null
-      : ((pageMm.h * 96 / 25.4) - opts.paddingPx * 2) / staffSpace;
-
-  final useWrap = opts.layout == 'wrapped';
-  double maxWidth;
-  if (!useWrap) {
-    maxWidth = double.infinity;
-  } else if (opts.maxWidth > 0) {
-    maxWidth = opts.maxWidth;
-  } else if (maxWidthFromPage != null && maxWidthFromPage > 0) {
-    maxWidth = maxWidthFromPage;
-  } else if (opts.measuresPerLine > 0) {
-    maxWidth = _probeWidthForMeasures(score, settings, opts.measuresPerLine);
-  } else {
-    maxWidth = 56;
-  }
-
-  final ScoreLayout? singleLineLayout;
-  final MultiSystemLayout? wrapped;
-  final showEveryMeasure = opts.measureNumbers == 'all';
-  final showSystemNumbers = opts.measureNumbers == 'system';
-
-  if (!useWrap) {
-    if (score.staffType == StaffType.jianpu) {
-      singleLineLayout = const JianpuLayoutEngine().layout(score, settings);
-    } else {
-      singleLineLayout = const LayoutEngine().layout(score, settings);
-    }
-    wrapped = null;
-  } else {
-    singleLineLayout = null;
-    wrapped = layoutSystems(score, settings,
-        maxWidth: maxWidth, showMeasureNumbers: showEveryMeasure);
-  }
-
-  final metadataForTitle =
-      opts.showTitle ? score.metadata : const ScoreMetadata();
-  final hasTitle = opts.showTitle &&
-      ((metadataForTitle.title ?? '').isNotEmpty ||
-          (metadataForTitle.composer ?? '').isNotEmpty);
-
-  if (pageMm == null) {
-    if (wrapped != null) {
-      return systemsToSvg(
-        wrapped,
-        staffSpace: staffSpace,
-        systemGap: systemGap,
-        metadata: hasTitle ? metadataForTitle : null,
-        showSystemMeasureNumbers: showSystemNumbers,
-        numberFirstSystem: showSystemNumbers,
-        glyphFontFamily: glyphFontFamily,
-        textFontFamily: textFontFamily,
-        color: color,
-        background: background,
-      );
-    }
-    assert(singleLineLayout != null);
-    return scoreToSvg(
-      singleLineLayout!,
-      staffSpace: staffSpace,
-      glyphFontFamily: glyphFontFamily,
-      textFontFamily: textFontFamily,
-      color: color,
-      background: background,
-    );
-  }
-
-  final pageWpx = opts.pageWidthPx ?? pageMm.w * 96 / 25.4;
-  final pageHpx = opts.pageHeightPx ?? pageMm.h * 96 / 25.4;
-  final padPx = opts.paddingPx;
-  const gapBetweenPagesPx = 16.0;
-
-  if (wrapped == null) {
-    assert(singleLineLayout != null);
-    final inner = scoreToSvg(
-      singleLineLayout!,
-      staffSpace: staffSpace,
-      glyphFontFamily: glyphFontFamily,
-      textFontFamily: textFontFamily,
-      color: color,
-      background: 'none',
-    );
-    final innerW = singleLineLayout.width * staffSpace;
-    final innerH = singleLineLayout.height * staffSpace;
-    final availW = pageWpx - padPx * 2;
-    final availH = pageHpx - padPx * 2;
-    var scale = 1.0;
-    if (innerW > 0 && innerH > 0) {
-      final sw = availW / innerW;
-      final sh = availH / innerH;
-      scale = sw < sh ? sw : sh;
-      if (scale > 1.0) scale = 1.0;
-    }
-    final out = StringBuffer();
-    out.write(_svgOpen(pageWpx, pageHpx, glyphFontFamily, background));
-    out.writeln(
-        '<g transform="translate(${_n(padPx + (availW - innerW * scale) / 2)} '
-        '${_n(padPx + (availH - innerH * scale) / 2)}) scale(${_n(scale)})">');
-    final s = _stripSvg(inner);
-    out.write(s.content);
-    out.writeln('</g></svg>');
-    return out.toString();
-  }
-
-  final titleTopStaff = hasTitle ? _titleBlockHeight(metadataForTitle) : 0.0;
-  final pages = maxHeightFromPage == null
-      ? [wrapped.systems]
-      : _planPages(
-          wrapped.systems, maxHeightFromPage, systemGap, titleTopStaff);
-  final numPages = pages.isEmpty ? 1 : pages.length;
-
-  final wrappedLayout = wrapped; // non-null past the single-line guard above
-  String pageSvgFor(int p) {
-    final sub =
-        MultiSystemLayout(systems: pages[p], maxWidth: wrappedLayout.maxWidth);
-    return systemsToSvg(
-      sub,
-      staffSpace: staffSpace,
-      systemGap: systemGap,
-      metadata: (p == 0 && hasTitle) ? metadataForTitle : null,
-      showSystemMeasureNumbers: showSystemNumbers,
-      numberFirstSystem: showSystemNumbers,
-      glyphFontFamily: glyphFontFamily,
-      textFontFamily: textFontFamily,
-      color: color,
-      background: 'none',
-    );
-  }
-
-  if (opts.pageFlow == 'vertical') {
-    // One SVG per page, joined by a marker the frontend splits on — screen CSS
-    // stacks the pages, print CSS breaks after each so every page prints whole.
-    final b = StringBuffer();
-    for (var p = 0; p < numPages; p++) {
-      if (p > 0) b.write('\n<!--crisp-page-->\n');
-      b.write(_svgOpen(pageWpx, pageHpx, glyphFontFamily, 'none'));
-      b.writeln('<rect x="0" y="0" width="${_n(pageWpx)}" '
-          'height="${_n(pageHpx)}" fill="$background"/>');
-      final s = _stripSvg(pageSvgFor(p));
-      b.writeln('<g transform="translate(${_n(padPx)} ${_n(padPx)})">');
-      b.write(s.content);
-      b.writeln('</g></svg>');
-    }
-    return b.toString();
-  }
-
-  final totalWpx = numPages * pageWpx + (numPages - 1) * gapBetweenPagesPx;
-  final b = StringBuffer();
-  b.write(_svgOpen(totalWpx, pageHpx, glyphFontFamily, 'none'));
-
-  var pageOrigX = 0.0;
-  for (var p = 0; p < numPages; p++) {
-    b.writeln('<rect x="${_n(pageOrigX)}" y="0" width="${_n(pageWpx)}" '
-        'height="${_n(pageHpx)}" fill="$background"/>');
-
-    final s = _stripSvg(pageSvgFor(p));
-
-    b.writeln(
-        '<g transform="translate(${_n(pageOrigX + padPx)} ${_n(padPx)})">');
-    b.write(s.content);
-    b.writeln('</g>');
-
-    pageOrigX += pageWpx + gapBetweenPagesPx;
-  }
-  b.writeln('</svg>');
-  return b.toString();
 }

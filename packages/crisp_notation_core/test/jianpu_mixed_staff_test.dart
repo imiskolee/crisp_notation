@@ -209,11 +209,7 @@ void main() {
       expect(pianoSpan.bottom, lessThanOrEqualTo(jianpuSpan.top));
     });
 
-    test('default connectBarlines leaves jianpu isolated', () {
-      // With no explicit groups and connectBarlines = true (the default), the
-      // system would normally draw one barline through all three staves. For
-      // a mixed system that includes jianpu, the engine must auto-break the
-      // barline at the jianpu boundary (jianpu is never joined across staves).
+    test('default connectBarlines joins mixed standard and jianpu staves', () {
       final treble = stdScore('c4:q d4 e4 f4');
       final bass = stdScore('c3:q d3 e3 f3');
       final jianpu = jianpuScore('c4:q d4 e4 f4');
@@ -222,11 +218,9 @@ void main() {
         settings,
       );
       final spans = layout.barlineSpans;
-      // The jianpu staff (index 2) is its own group; the two standard staves
-      // are joined together (one span over 0..1).
-      expect(spans.length, 2);
-      expect(spans.last.top, closeTo(layout.staffTop(2), 0.001));
-      expect(spans.first.bottom, lessThanOrEqualTo(spans.last.top));
+      expect(spans.length, 1);
+      expect(spans.single.top, closeTo(layout.staffTop(0), 0.001));
+      expect(spans.single.bottom, closeTo(layout.staffTop(2) + 4, 0.001));
     });
   });
 

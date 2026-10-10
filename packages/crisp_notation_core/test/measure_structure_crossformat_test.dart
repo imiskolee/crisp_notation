@@ -44,7 +44,22 @@ void main() {
         ],
       );
 
+  Score irregular() => Score(
+        clef: Clef.treble,
+        timeSignature: const TimeSignature(4, 4),
+        measures: [
+          Measure(
+            ns('i').take(3).toList(),
+            actualDuration: Fraction(3, 4),
+          ),
+          Measure(ns('j')),
+        ],
+      );
   for (final e in hops.entries) {
+    test('${e.key} keeps an explicit irregular measure duration', () {
+      final back = e.value(irregular());
+      expect(back.measures.first.actualDuration, Fraction(3, 4), reason: e.key);
+    });
     test('${e.key} keeps a mid-score KEY change', () {
       final back = e.value(scored());
       expect(back.measures[2].keyChange?.fifths, -2, reason: e.key);

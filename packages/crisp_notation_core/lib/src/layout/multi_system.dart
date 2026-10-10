@@ -9,12 +9,25 @@ import '../model/score.dart';
 import '../theory/clef.dart';
 import '../theory/key_signature.dart';
 import '../theory/time_signature.dart';
+import '../theory/tuning.dart';
 import 'grand_staff.dart';
 import 'jianpu_layout.dart';
 import 'layout_engine.dart';
 import 'layout_settings.dart';
 import 'score_layout.dart';
 import 'staff_system.dart';
+import 'tab_layout.dart';
+
+/// Infer a [Tuning] for a [Score] whose staffType is [StaffType.tablature].
+/// Falls back to the standard guitar tuning when nothing is known.
+Tuning _inferTuningForScore(Score score) {
+  final inst = score.metadata.instrument?.toLowerCase() ?? '';
+  if (inst.contains('bass') || inst.contains('贝斯')) return Tuning.standardBass;
+  if (inst.contains('7')) return Tuning.sevenStringGuitar;
+  if (inst.contains('ukulele') || inst.contains('尤克里里')) return Tuning.ukulele;
+  if (inst.contains('drop') || inst.contains('降d')) return Tuning.dropDGuitar;
+  return Tuning.standardGuitar;
+}
 
 /// Stretches a system to fill [maxWidth]: returns the layout for the largest
 /// spacing stretch whose width still fits.
@@ -46,6 +59,7 @@ T _stretchToFit<T>({
   required double maxWidth,
   double minStretch = 1.0,
   double maxStretch = 4.0,
+  bool expandStretch = false,
   int maxIterations = 24,
   double tolerance = 0.05,
 }) {
@@ -54,11 +68,19 @@ T _stretchToFit<T>({
   var fa = widthOf(initial) - maxWidth;
   var best = initial;
 
-  // If even the widest stretch fits, take it — nothing to search for.
-  final widest = render(maxStretch);
-  var fb = widthOf(widest) - maxWidth;
-  if (fb <= 0) return widest;
   var b = maxStretch;
+  var widest = render(b);
+  var fb = widthOf(widest) - maxWidth;
+  if (expandStretch) {
+    for (var i = 0; fb < -tolerance && i < maxIterations; i++) {
+      final previousWidth = widthOf(widest);
+      b *= 2;
+      widest = render(b);
+      fb = widthOf(widest) - maxWidth;
+      if (widthOf(widest) <= previousWidth) break;
+    }
+  }
+  if (fb <= 0) return widest;
 
   var retained = 0; // -1 = kept `a` last time, 1 = kept `b`
   for (var i = 0; i < maxIterations; i++) {
@@ -163,41 +185,57 @@ MultiSystemLayout layoutSystems(
   bool showMeasureNumbers = false,
   int measureNumberInterval = 1,
 }) {
-  // Pick engine by score.staffType so wrapped jianpu uses the jianpu engine.
+  // Pick engine by score.staffType so wrapped jianpu uses the jianpu engine,
+  // wrapped tablature uses the tab engine, everything else the staff engine.
   final isJianpu = score.staffType == StaffType.jianpu;
+  final isTablature = score.staffType == StaffType.tablature;
   const staffEngine = LayoutEngine();
   const jianpuEngine = JianpuLayoutEngine();
+  const tabEngine = TabLayoutEngine();
+  final tuning = _inferTuningForScore(score);
   ScoreLayout layoutScore(Score s, LayoutSettings settings,
       {required bool drawTimeSignature,
       required bool finalBarline,
       int measureNumberOffset = 0}) {
-    return isJianpu
-        ? jianpuEngine.layout(s, settings,
-            drawTimeSignature: drawTimeSignature, finalBarline: finalBarline)
-        : staffEngine.layout(s, settings,
-            drawTimeSignature: drawTimeSignature,
-            finalBarline: finalBarline,
-            showMeasureNumbers: showMeasureNumbers,
-            measureNumberInterval: measureNumberInterval,
-            measureNumberOffset: measureNumberOffset);
+    if (isJianpu) {
+      return jianpuEngine.layout(s, settings,
+          drawTimeSignature: drawTimeSignature, finalBarline: finalBarline);
+    }
+    if (isTablature) {
+      return tabEngine.layout(s, tuning, settings);
+    }
+    return staffEngine.layout(s, settings,
+        drawTimeSignature: drawTimeSignature,
+        finalBarline: finalBarline,
+        extraFingerings: extraFingerings,
+        showMeasureNumbers: showMeasureNumbers,
+        measureNumberInterval: measureNumberInterval,
+        measureNumberOffset: measureNumberOffset);
   }
+
   ScoreLayout layoutStretch(Score s, LayoutSettings settings,
       {double spacingStretch = 1.0,
       required bool drawTimeSignature,
       required bool finalBarline,
       int measureNumberOffset = 0}) {
-    return isJianpu
-        ? jianpuEngine.layout(s, settings,
-            spacingStretch: spacingStretch,
-            drawTimeSignature: drawTimeSignature,
-            finalBarline: finalBarline)
-        : staffEngine.layout(s, settings,
-            spacingStretch: spacingStretch,
-            drawTimeSignature: drawTimeSignature,
-            finalBarline: finalBarline,
-            showMeasureNumbers: showMeasureNumbers,
-            measureNumberInterval: measureNumberInterval,
-            measureNumberOffset: measureNumberOffset);
+    if (isJianpu) {
+      return jianpuEngine.layout(s, settings,
+          spacingStretch: spacingStretch,
+          drawTimeSignature: drawTimeSignature,
+          finalBarline: finalBarline);
+    }
+    if (isTablature) {
+      // TabLayoutEngine doesn't support spacingStretch; use default spacing.
+      return tabEngine.layout(s, tuning, settings);
+    }
+    return staffEngine.layout(s, settings,
+        spacingStretch: spacingStretch,
+        drawTimeSignature: drawTimeSignature,
+        finalBarline: finalBarline,
+        extraFingerings: extraFingerings,
+        showMeasureNumbers: showMeasureNumbers,
+        measureNumberInterval: measureNumberInterval,
+        measureNumberOffset: measureNumberOffset);
   }
 
   if (maxWidth <= 0) {
@@ -212,7 +250,8 @@ MultiSystemLayout layoutSystems(
 
   // Natural widths of every measure, plus the running clef/key/time state
   // at each measure start.
-  final natural = layoutScore(score, settings, drawTimeSignature: false, finalBarline: true);
+  final natural = layoutScore(score, settings,
+      drawTimeSignature: false, finalBarline: true);
   final measureCount = score.measures.length;
   final (clefAt, keyAt, timeAt) = _stateArrays(score);
 
@@ -269,9 +308,9 @@ MultiSystemLayout layoutSystems(
       end--;
       slice = _slice(score, start, end, clefAt, keyAt, timeAt);
       layout = layoutScore(slice, settings,
-        drawTimeSignature: drawTime,
-        finalBarline: end == measureCount - 1,
-        measureNumberOffset: barOffset);
+          drawTimeSignature: drawTime,
+          finalBarline: end == measureCount - 1,
+          measureNumberOffset: barOffset);
     }
     final isLastSystem = end == measureCount - 1;
     if (justify && !isLastSystem && layout.width < maxWidth) {
@@ -502,6 +541,7 @@ StaffSystemSystems layoutStaffSystemSystems(
   StaffSystem document,
   LayoutSettings settings, {
   required double maxWidth,
+  double Function(int systemIndex)? widthForSystem,
   SystemLayoutMode layoutMode = SystemLayoutMode.wrapped,
   double staffGap = 4.0,
   bool justify = true,
@@ -573,7 +613,15 @@ StaffSystemSystems layoutStaffSystemSystems(
   final states = [for (final p in parts) _stateArrays(p)];
   final hardBreaks = systemBreaks;
   final sourceBreaks = document.systemBreaks.difference(hardBreaks);
-  final softBreakFill = maxWidth * 0.72;
+
+  double targetWidthFor(int systemIndex) {
+    final width = widthForSystem?.call(systemIndex) ?? maxWidth;
+    if (width <= 0) {
+      throw ArgumentError.value(
+          width, 'widthForSystem($systemIndex)', 'must be positive');
+    }
+    return width;
+  }
 
   // The parts to show on the system covering [start]..[end]: with hide-empty,
   // parts silent throughout the range are dropped — except on the first system
@@ -624,12 +672,14 @@ StaffSystemSystems layoutStaffSystemSystems(
   final systems = <StaffSystemSystem>[];
   var start = 0;
   while (start < n) {
+    final targetWidth = targetWidthFor(systems.length);
+    final softBreakFill = targetWidth * 0.72;
     var end = start;
     var used = leadEstimate + combined[start];
     while (end + 1 < n &&
         !hardBreaks.contains(end + 1) &&
         (!sourceBreaks.contains(end + 1) || used < softBreakFill) &&
-        used + combined[end + 1] <= maxWidth) {
+        used + combined[end + 1] <= targetWidth) {
       end++;
       used += combined[end];
     }
@@ -653,7 +703,6 @@ StaffSystemSystems layoutStaffSystemSystems(
             gridAlign: gridAlign,
             drawTimeSignature: drawTime,
             finalBarline: isLast,
-            targetWidth: !isLast && end == start ? maxWidth : null,
             spacingStretch: stretch,
             showNoteNames: showNoteNames,
             showNoteOctaves: showNoteOctaves,
@@ -665,15 +714,16 @@ StaffSystemSystems layoutStaffSystemSystems(
             measureNumberOffset: _countedBarsBefore(parts.first, start),
           );
       layout = render(1.0);
-      if (justify && !isLast && end > start && layout.width < maxWidth) {
+      if (justify && !isLast && layout.width < targetWidth) {
         layout = _stretchToFit<StaffSystemLayout>(
           render: render,
           widthOf: (l) => l.width,
           initial: layout,
-          maxWidth: maxWidth,
+          maxWidth: targetWidth,
+          expandStretch: true,
         );
       }
-      if (layout.width <= maxWidth || end == start) break;
+      if (layout.width <= targetWidth || end == start) break;
       end--;
     }
     systems.add(StaffSystemSystem(
