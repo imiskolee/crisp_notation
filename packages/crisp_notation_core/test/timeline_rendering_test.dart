@@ -34,6 +34,297 @@ void main() {
             SmuflMetadata.fromJson(jsonDecode(source) as Map<String, Object?>));
   });
 
+  group('fixed StaffSystem timeline', () {
+    for (final type in [
+      StaffType.standard,
+      StaffType.jianpu,
+      StaffType.tablature
+    ]) {
+      for (final meter in [TimeSignature.fourFour, TimeSignature.sixEight]) {
+        test('$type $meter fixes notes and bar beats without optical gaps', () {
+          final count = meter == TimeSignature.sixEight ? 6 : 8;
+          final score = Score(
+              clef: Clef.treble,
+              staffType: type,
+              timeSignature: meter,
+              measures: [
+                for (var m = 0; m < 3; m++)
+                  Measure([
+                    for (var i = 0; i < count; i++)
+                      note('$m-$i', const Pitch(Step.e, alter: -1, octave: 4),
+                          NoteDuration.eighth),
+                  ],
+                      timeChange: m == 1 ? meter : null,
+                      startRepeat: m == 1,
+                      endRepeat: m == 1),
+              ]);
+          for (final beatWidth in [0.1, 4.0]) {
+            final layout = layoutStaffSystem(StaffSystem([score]), settings,
+                    timelineBeatWidth: beatWidth,
+                    timelineLeadingWidth: 0,
+                    timelineDurationBeats: 32,
+                    spacingStretch: 5,
+                    targetWidth: 1000,
+                    gridAlign: false)
+                .staves
+                .single;
+            for (var m = 0; m < 3; m++) {
+              expect(layout.measureRegions[m].startX,
+                  closeTo(m * count / 2 * beatWidth, 1e-9));
+              expect(layout.measureRegions[m].endX,
+                  closeTo((m + 1) * count / 2 * beatWidth, 1e-9));
+              for (var i = 0; i < count; i++) {
+                final id = '$m-$i';
+                final x = type == StaffType.standard
+                    ? heads(layout, id).single.position.x
+                    : layout.primitives
+                        .whereType<TextPrimitive>()
+                        .firstWhere((p) =>
+                            p.elementId == id &&
+                            RegExp(r'^\d+$').hasMatch(p.text))
+                        .position
+                        .x;
+                final visualOffset =
+                    type == StaffType.standard && m > 0 && i == 0
+                        ? 2 / 7.5
+                        : 0.0;
+                expect(
+                    x,
+                    closeTo(
+                        (m * count + i) / 2 * beatWidth + visualOffset, 1e-9));
+              }
+            }
+            expect(layout.width, closeTo(32 * beatWidth, 1e-9));
+          }
+        });
+      }
+    }
+
+    test('mixed staves share exact pickup and changed-meter boundaries', () {
+      final system = StaffSystem([
+        for (final type in [
+          StaffType.standard,
+          StaffType.jianpu,
+          StaffType.tablature
+        ])
+          Score(
+              clef: Clef.treble,
+              staffType: type,
+              timeSignature: TimeSignature.fourFour,
+              measures: [
+                Measure([note('$type-pickup', const Pitch(Step.e, octave: 4))],
+                    actualDuration: Fraction(1, 4)),
+                Measure([
+                  for (var i = 0; i < 6; i++)
+                    note('$type-$i', const Pitch(Step.e, octave: 4),
+                        NoteDuration.eighth)
+                ], timeChange: TimeSignature.sixEight),
+              ]),
+      ]);
+      final layout = layoutStaffSystem(system, settings,
+          timelineBeatWidth: 4,
+          timelineLeadingWidth: 12,
+          timelineDurationBeats: 8);
+      for (final staff in layout.staves) {
+        expect(staff.measureRegions.map((r) => r.startX), [12, 16]);
+        expect(staff.measureRegions.map((r) => r.endX), [16, 28]);
+        expect(staff.width, 44);
+      }
+    });
+
+    test(
+        'standard internal barline and next note separate around timeline anchor',
+        () {
+      final score = Score(
+          clef: Clef.treble,
+          timeSignature: TimeSignature.fourFour,
+          measures: [
+            Measure([
+              note('first', const Pitch(Step.d, octave: 4), NoteDuration.whole)
+            ]),
+            Measure([
+              note('next', const Pitch(Step.e, octave: 4), NoteDuration.whole)
+            ]),
+          ]);
+      final layout = layoutStaffSystem(StaffSystem([score]), settings,
+              timelineBeatWidth: 4, timelineLeadingWidth: 12)
+          .staves
+          .single;
+      final nextHead = heads(layout, 'next').single;
+      final internalBar = layout.primitives
+          .whereType<LinePrimitive>()
+          .singleWhere((p) =>
+              p.from.x == p.to.x &&
+              p.from.y == 0 &&
+              p.to.y == 4 &&
+              p.from.x <= layout.measureRegions[1].startX);
+
+      expect(layout.measureRegions.map((r) => (r.startX, r.endX)),
+          [(12.0, 28.0), (28.0, 44.0)]);
+      expect(internalBar.from.x, closeTo(28 - 2 / 7.5, 1e-9));
+      expect(nextHead.position.x, closeTo(28 + 2 / 7.5, 1e-9));
+    });
+
+    test('timeline rejects invalid widths and durations', () {
+      final system = StaffSystem([
+        Score(clef: Clef.treble, measures: [
+          Measure([note('n', const Pitch(Step.e, octave: 4))])
+        ])
+      ]);
+      for (final width in [0.0, -1.0, double.nan, double.infinity]) {
+        expect(
+            () => layoutStaffSystem(system, settings, timelineBeatWidth: width),
+            throwsArgumentError);
+      }
+      for (final value in [-1.0, double.nan, double.infinity]) {
+        expect(
+            () => layoutStaffSystem(system, settings,
+                timelineBeatWidth: 4, timelineLeadingWidth: value),
+            throwsArgumentError);
+        expect(
+            () => layoutStaffSystem(system, settings,
+                timelineBeatWidth: 4, timelineDurationBeats: value),
+            throwsArgumentError);
+      }
+    });
+
+    test('fixed whole-bar rest anchors at its onset rather than optical center',
+        () {
+      final score = Score(
+          clef: Clef.treble,
+          timeSignature: TimeSignature.fourFour,
+          measures: [
+            Measure([RestElement(NoteDuration.whole, id: 'whole')]),
+          ]);
+      final layout = layoutStaffSystem(StaffSystem([score]), settings,
+              timelineBeatWidth: 4, timelineLeadingWidth: 12)
+          .staves
+          .single;
+      final rest = layout.primitives
+          .whereType<GlyphPrimitive>()
+          .singleWhere((p) => p.elementId == 'whole');
+      expect(rest.position.x, 12);
+      expect(layout.measureRegions.single.endX, 28);
+    });
+
+    test('fixed multi-voice whole rest anchors at beat zero', () {
+      final score = Score(
+          clef: Clef.treble,
+          timeSignature: TimeSignature.fourFour,
+          measures: [
+            Measure([
+              note('note', const Pitch(Step.e, octave: 4), NoteDuration.whole)
+            ], voice2: [
+              RestElement(NoteDuration.whole, id: 'whole')
+            ]),
+          ]);
+      final layout = layoutStaffSystem(StaffSystem([score]), settings,
+              timelineBeatWidth: 4, timelineLeadingWidth: 12)
+          .staves
+          .single;
+      expect(
+          layout.primitives
+              .whereType<GlyphPrimitive>()
+              .singleWhere((p) => p.elementId == 'whole')
+              .position
+              .x,
+          12);
+    });
+
+    test('jianpu sustained digits and rest quarter points stay on the timeline',
+        () {
+      final score = Score(
+          clef: Clef.treble,
+          staffType: StaffType.jianpu,
+          timeSignature: TimeSignature.fourFour,
+          measures: [
+            Measure([RestElement(NoteDuration.whole, id: 'rest')]),
+            Measure([
+              note('long', const Pitch(Step.e, octave: 4), NoteDuration.whole)
+            ]),
+          ]);
+      final layout = layoutStaffSystem(StaffSystem([score]), settings,
+              timelineBeatWidth: 4, timelineLeadingWidth: 12)
+          .staves
+          .single;
+      expect(zeros(layout).map((p) => p.position.x), [12, 16, 20, 24]);
+      final dashes = layout.primitives
+          .whereType<LinePrimitive>()
+          .where((p) => p.elementId == 'long' && p.from.y == p.to.y)
+          .toList();
+      expect(dashes, hasLength(3));
+      expect(dashes.map((p) => (p.from.x + p.to.x) / 2), [32, 36, 40]);
+    });
+
+    test('jianpu internal barline stays left of the next fixed-timeline digit',
+        () {
+      final score = Score(
+          clef: Clef.treble,
+          staffType: StaffType.jianpu,
+          timeSignature: TimeSignature.fourFour,
+          measures: [
+            Measure([
+              note('first', const Pitch(Step.d, octave: 4), NoteDuration.whole)
+            ]),
+            Measure([
+              note('next', const Pitch(Step.e, octave: 4), NoteDuration.whole)
+            ]),
+          ]);
+      final layout = layoutStaffSystem(StaffSystem([score]), settings,
+              timelineBeatWidth: 4, timelineLeadingWidth: 12)
+          .staves
+          .single;
+      final digit = layout.primitives
+          .whereType<TextPrimitive>()
+          .singleWhere((p) => p.elementId == 'next' && p.text == '3');
+      final internalBar = layout.primitives
+          .whereType<LinePrimitive>()
+          .where((p) =>
+              p.from.x == p.to.x &&
+              p.from.y == JianpuLayoutEngine.barlineTop &&
+              p.to.y == JianpuLayoutEngine.barlineBottom)
+          .reduce((a, b) => (a.from.x - digit.position.x).abs() <
+                  (b.from.x - digit.position.x).abs()
+              ? a
+              : b);
+
+      expect(digit.position.x, closeTo(28, 1e-9));
+      expect(internalBar.to.x, lessThan(digit.position.x));
+    });
+
+    test('jianpu start repeat stays left of the fixed-timeline first digit',
+        () {
+      final score = Score(
+          clef: Clef.treble,
+          staffType: StaffType.jianpu,
+          timeSignature: TimeSignature.fourFour,
+          measures: [
+            Measure([
+              note('first', const Pitch(Step.c, octave: 4), NoteDuration.whole)
+            ]),
+            Measure([
+              note('repeated', const Pitch(Step.e, octave: 4),
+                  NoteDuration.whole)
+            ], startRepeat: true),
+          ]);
+      final layout = layoutStaffSystem(StaffSystem([score]), settings,
+              timelineBeatWidth: 4, timelineLeadingWidth: 12)
+          .staves
+          .single;
+      final digit = layout.primitives
+          .whereType<TextPrimitive>()
+          .singleWhere((p) => p.elementId == 'repeated' && p.text == '3');
+      final rightmostRepeatDot = layout.primitives
+          .whereType<GlyphPrimitive>()
+          .where((p) => p.smuflName == SmuflGlyph.repeatDot)
+          .map((p) => p.position.x)
+          .reduce((a, b) => a > b ? a : b);
+
+      expect(digit.position.x, closeTo(28, 1e-9));
+      expect(rightmostRepeatDot, lessThan(digit.position.x));
+    });
+  });
+
   group('shared timeline consumers', () {
     for (final hasLocalEnd in [true, false]) {
       test('short multivoice rest stays at onset, local end $hasLocalEnd', () {

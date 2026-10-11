@@ -163,12 +163,7 @@ class _Tune {
   /// voice with NO clef anywhere gets one inferred from its pitch layout.
   final bool headerClefExplicit;
 
-  /// Header `Q:` tempo, rendered above the first note of the top voice.
-  final String? tempo;
-
-  /// The same `Q:` as a metronome mark. The rendered text above is what the
-  /// layout draws — nothing in it draws [Tempo] — but only the model value
-  /// reaches playback, so a `Q:` used to be visible and inaudible.
+  /// Header `Q:` metronome mark used as the score's initial playback tempo.
   final Tempo? tempoMark;
 
   /// Voice ids in declaration order (at least one — an implicit voice when the
@@ -202,7 +197,6 @@ class _Tune {
     this.key,
     this.headerClef,
     this.headerClefExplicit,
-    this.tempo,
     this.tempoMark,
     this.order,
     this.clefs,
@@ -241,17 +235,7 @@ class _Tune {
         : withDetectedPickup(parser.measures, meter);
     final voiceLyrics = _alignLyrics(lyrics[id] ?? const [], parser.noteOrder);
 
-    // The header tempo sits above the first note of the top staff.
     var annotations = parser.annotations;
-    if (tempo != null && id == order.first) {
-      final firstNote = parser.noteOrder.firstWhere(
-        (s) => s != '|',
-        orElse: () => '',
-      );
-      if (firstNote.isNotEmpty) {
-        annotations = [Annotation(firstNote, tempo!), ...annotations];
-      }
-    }
 
     // `s:` symbol lines: decorations / chord symbols aligned to the notes.
     var finalMeasures = measures;
@@ -349,7 +333,6 @@ _Tune _collectTune(String abc, {int tune = 0}) {
   var key = const KeySignature(0);
   var headerClef = Clef.treble;
   var headerClefExplicit = false;
-  String? tempo;
   Tempo? tempoMark;
   String? title;
   String? composer;
@@ -432,7 +415,6 @@ _Tune _collectTune(String abc, {int tune = 0}) {
         case 'C':
           composer ??= value.isEmpty ? null : value;
         case 'Q':
-          tempo = _parseTempo(value);
           tempoMark = parseAbcTempo(value).tempo;
         case 'K':
           final parsed = _parseKey(value);
@@ -467,9 +449,9 @@ _Tune _collectTune(String abc, {int tune = 0}) {
         // A part label ("P:A") → an above-note annotation on the next note.
         bodies[active()]!.write('"^$value" ');
       } else if (line[0] == 'Q') {
-        // A mid-tune tempo change → an above-note annotation.
-        final t = _parseTempo(value);
-        if (t != null) bodies[active()]!.write('"^$t" ');
+        // Normalize a standalone body field through the inline-field parser so
+        // its structured tempo change and visible next-note annotation agree.
+        bodies[active()]!.write('[Q:$value] ');
       }
       continue; // mid-tune field line
     }
@@ -504,7 +486,6 @@ _Tune _collectTune(String abc, {int tune = 0}) {
     key,
     headerClef,
     headerClefExplicit,
-    tempo,
     tempoMark,
     order,
     clefs,
@@ -581,8 +562,7 @@ String _tempoNote(int num, int den) {
   // Voice/instrument name: `nm="Vocal"` or unquoted `name=Vocal`. Only the
   // full name — `snm=`/`short=` (abbreviated labels) is not modeled.
   String? name;
-  final nm = RegExp(r'(?:name|nm)\s*=\s*(?:"([^"]*)"|(\S+))')
-      .firstMatch(value);
+  final nm = RegExp(r'(?:name|nm)\s*=\s*(?:"([^"]*)"|(\S+))').firstMatch(value);
   if (nm != null) {
     final n = (nm[1] ?? nm[2] ?? '').trim();
     if (n.isNotEmpty) name = n;
@@ -884,10 +864,15 @@ class _AbcBody {
         final l = _parseUnitLength(value);
         if (l != null) unit = l;
       case 'Q':
-        // A mid-tune tempo. ABC's `Q:` is a header field, so a CHANGE can only
-        // ride the body as an inline field — which is why every mid-score
-        // tempo was dropped even though the header one round-tripped.
-        _pendingTempoChange = parseAbcTempo(value).tempo;
+        // A real mid-tune tempo change affects playback from this measure and
+        // prints above the next note. Header Q: is handled separately and is
+        // deliberately not turned into an annotation.
+        final change = parseAbcTempo(value).tempo;
+        final text = _parseTempo(value);
+        if (change != null) {
+          _pendingTempoChange = change;
+          if (text != null) _pendingTexts.add(text);
+        }
     }
   }
 

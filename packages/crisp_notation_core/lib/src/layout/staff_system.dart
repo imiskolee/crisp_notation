@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import '../model/element.dart';
 import '../model/score.dart';
+import '../theory/fraction.dart';
 import 'grand_staff.dart' show alignedColumns, layoutStaff;
 import 'layout_settings.dart';
 import 'score_layout.dart';
@@ -288,6 +289,9 @@ StaffSystemLayout layoutStaffSystem(
   bool finalBarline = true,
   double spacingStretch = 1.0,
   double? targetWidth,
+  double? timelineBeatWidth,
+  double? timelineLeadingWidth,
+  double? timelineDurationBeats,
   bool showNoteNames = false,
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
@@ -295,6 +299,19 @@ StaffSystemLayout layoutStaffSystem(
   int measureNumberInterval = 1,
   int measureNumberOffset = 0,
 }) {
+  for (final entry in {
+    'timelineBeatWidth': timelineBeatWidth,
+    'timelineLeadingWidth': timelineLeadingWidth,
+    'timelineDurationBeats': timelineDurationBeats,
+  }.entries) {
+    final value = entry.value;
+    if (value != null &&
+        (!value.isFinite ||
+            value < 0 ||
+            (entry.key == 'timelineBeatWidth' && value == 0))) {
+      throw ArgumentError.value(value, entry.key, 'invalid timeline value');
+    }
+  }
   if (hideEmptyStaves) {
     system = _withEmptyStavesHidden(system);
   }
@@ -330,8 +347,26 @@ StaffSystemLayout layoutStaffSystem(
 
   // §2.9: align simultaneous notes across every staff of the system (all
   // voices).
-  final columns = gridAlign
-      ? alignedColumns(system.staves, settings, spacingStretch: spacingStretch)
+  final fixedTimeline = timelineBeatWidth != null;
+  if (fixedTimeline && timelineLeadingWidth != null) {
+    leading = timelineLeadingWidth;
+  }
+  final columns = gridAlign || fixedTimeline
+      ? alignedColumns(system.staves, settings,
+          spacingStretch: spacingStretch, timelineBeatWidth: timelineBeatWidth)
+      : null;
+  final measureStartXs = fixedTimeline ? <double>[] : null;
+  var elapsed = Fraction.zero;
+  if (fixedTimeline) {
+    for (final measure in columns!) {
+      measureStartXs!.add(leading + elapsed.toDouble() * 4 * timelineBeatWidth);
+      elapsed += measure.keys.reduce((a, b) => a > b ? a : b);
+    }
+  }
+  final minimumWidth = fixedTimeline
+      ? leading +
+          math.max(elapsed.toDouble() * 4, timelineDurationBeats ?? 0) *
+              timelineBeatWidth
       : null;
 
   final measureWidths = columns != null
@@ -352,7 +387,9 @@ StaffSystemLayout layoutStaffSystem(
           forcedColumns: columns,
           drawTimeSignature: drawTimeSignature,
           finalBarline: finalBarline,
-          targetWidth: targetWidth,
+          targetWidth: fixedTimeline ? null : targetWidth,
+          measureStartXs: measureStartXs,
+          minimumWidth: minimumWidth,
           spacingStretch: spacingStretch,
           showNoteNames: showNoteNames,
           showNoteOctaves: showNoteOctaves,

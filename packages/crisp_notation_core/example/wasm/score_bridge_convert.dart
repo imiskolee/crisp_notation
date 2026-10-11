@@ -6,12 +6,16 @@ import 'package:crisp_notation_core/crisp_notation_core.dart';
 
 class _RenderOptions {
   final String layout;
+  final double? timelineBeatWidthPx;
+  final double? timelineLeadingWidthPx;
+  final double? timelineDurationBeats;
   final double maxWidth;
   final int measuresPerLine;
   final double staffSpace;
   final String background;
   final String backgroundCustom;
   final String density;
+  final SpacingPolicy spacingPolicy;
   final String? title;
   final String? author;
   final bool showTitle;
@@ -33,12 +37,20 @@ class _RenderOptions {
 
   _RenderOptions.fromJson(Map<String, dynamic> json)
       : layout = (json['layout'] as String?) ?? 'wrapped',
+        timelineBeatWidthPx = (json['timelineBeatWidthPx'] as num?)?.toDouble(),
+        timelineLeadingWidthPx =
+            (json['timelineLeadingWidthPx'] as num?)?.toDouble(),
+        timelineDurationBeats =
+            (json['timelineDurationBeats'] as num?)?.toDouble(),
         maxWidth = (json['maxWidth'] as num?)?.toDouble() ?? 0.0,
         measuresPerLine = (json['measuresPerLine'] as int?) ?? 0,
         staffSpace = (json['staffSpace'] as num?)?.toDouble() ?? 7.5,
         background = (json['background'] as String?) ?? 'paper',
         backgroundCustom = (json['backgroundCustom'] as String?) ?? '#ffffff',
         density = (json['density'] as String?) ?? 'normal',
+        spacingPolicy = json['spacingPolicy'] == 'equalBeat'
+            ? SpacingPolicy.equalBeat
+            : SpacingPolicy.optical,
         title = json['title'] as String?,
         author = json['author'] as String?,
         showTitle = (json['showTitle'] as bool?) ?? true,
@@ -183,6 +195,7 @@ String _renderStaffSystemToSvg(
   final m = opts.spacingMultiplier();
   final settings = LayoutSettings(
     metadata: metadata,
+    spacingPolicy: opts.spacingPolicy,
     spacingBase: 1.8 * m,
     spacingPerLog2: 0.75 * m,
     minNoteGap: 0.6 * m,
@@ -200,8 +213,23 @@ String _renderStaffSystemToSvg(
   final showEveryMeasure = opts.measureNumbers == 'all';
   final showSystemNumbers = opts.measureNumbers == 'system';
 
-  if (opts.layout != 'wrapped') {
-    final layout = layoutStaffSystemSingleLine(system, settings);
+  if (opts.layout != 'wrapped' || opts.timelineBeatWidthPx != null) {
+    if (opts.timelineBeatWidthPx != null &&
+        (!staffSpace.isFinite || staffSpace <= 0)) {
+      throw ArgumentError.value(
+          staffSpace, 'staffSpace', 'must be finite and positive');
+    }
+    final layout = layoutStaffSystem(
+      system,
+      settings,
+      timelineBeatWidth: opts.timelineBeatWidthPx == null
+          ? null
+          : opts.timelineBeatWidthPx! / staffSpace,
+      timelineLeadingWidth: opts.timelineLeadingWidthPx == null
+          ? null
+          : opts.timelineLeadingWidthPx! / staffSpace,
+      timelineDurationBeats: opts.timelineDurationBeats,
+    );
     return staffSystemToSvg(
       layout,
       staffSpace: staffSpace,

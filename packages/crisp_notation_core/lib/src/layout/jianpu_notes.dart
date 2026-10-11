@@ -80,7 +80,7 @@ extension _JianpuNotes on _JianpuBuilder {
     for (var mi = 0; mi < n; mi++) {
       final baseline = stackBottom - (n - 1 - mi) * (cap + _chordGap);
       primitives.add(TextPrimitive('${degrees[mi].$1}', Point(digitX, baseline),
-          size: chordSize, elementId: id));
+          size: chordSize, fontWeight: 600, elementId: id));
       final dev = drawDevs[mi];
       if (dev != null) {
         _drawAccidentalPrefix(dev, digitX, id,
@@ -91,7 +91,7 @@ extension _JianpuNotes on _JianpuBuilder {
     var columnBottom = stackBottom;
 
     if (degrees.first.$3 > 0) {
-      var cy = stackTop - _symbolGap - _dotHalf;
+      var cy = stackTop - _symbolGap - _dotHalf - _highOctaveDotLift;
       for (var d = 0; d < degrees.first.$3; d++) {
         _glyphCenteredAt(SmuflGlyph.augmentationDot, digitX, cy, 1.0, id);
         cy -= _dotStep;
@@ -147,9 +147,10 @@ extension _JianpuNotes on _JianpuBuilder {
       }
     }
     primitives.add(TextPrimitive('$digit', Point(digitX, _digitBaseline),
-        size: _digitSize, elementId: id));
+        size: _digitSize, fontWeight: 600, elementId: id));
     if (octaveDots > 0) {
-      var cy = _digitTop - _symbolGap - _dotHalf;
+      var cy =
+          _digitTop - _symbolGap - _dotHalf - _highOctaveDotLift;
       for (var d = 0; d < octaveDots; d++) {
         _glyphCenteredAt(SmuflGlyph.augmentationDot, digitX, cy, 1.0, id);
         cy -= _dotStep;
@@ -284,7 +285,7 @@ extension _JianpuNotes on _JianpuBuilder {
     final longRestUnits = JianpuLayoutEngine._longRestQuarterUnits(duration);
     if (longRestUnits <= 1) {
       primitives.add(TextPrimitive('0', Point(digitX, _digitBaseline),
-          size: _digitSize, elementId: id));
+          size: _digitSize, fontWeight: 600, elementId: id));
     } else {
       for (var u = 0; u < longRestUnits; u++) {
         final ux = positionColumns != null && positionColumns.isNotEmpty
@@ -292,7 +293,7 @@ extension _JianpuNotes on _JianpuBuilder {
                 xAtTime(positionColumns, noteOnset + Fraction(u, 4))
             : digitX + u * quarterCell;
         primitives.add(TextPrimitive('0', Point(ux, _digitBaseline),
-            size: _digitSize, elementId: id));
+            size: _digitSize, fontWeight: 600, elementId: id));
       }
     }
     if (id != null) anchorX[id] = digitX;
@@ -381,7 +382,7 @@ extension _JianpuNotes on _JianpuBuilder {
           primitives.add(LinePrimitive(
             Point(cols[run[k]].x - _underlinePad, y),
             Point(cols[run[l]].x + max(_underlinePad, cols[run[l]].dotExt), y),
-            thickness: 0.16,
+            thickness: 0.18,
           ));
           deepest = max(deepest, y);
           k = l + 1;

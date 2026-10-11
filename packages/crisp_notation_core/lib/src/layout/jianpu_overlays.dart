@@ -126,15 +126,22 @@ extension _JianpuOverlays on _JianpuBuilder {
     var baseline = 0.5;
     for (final primitive in primitives) {
       if (primitive is TextPrimitive) {
-        baseline = min(baseline,
-            primitive.position.y - primitive.size * 0.8 - s.annotationGap - size * 0.25);
+        baseline = min(
+            baseline,
+            primitive.position.y -
+                primitive.size * 0.8 -
+                s.annotationGap -
+                size * 0.25);
       } else if (primitive is CurvePrimitive) {
-        baseline = min(baseline,
-            min(primitive.control1.y, primitive.control2.y) - s.annotationGap - size * 0.25);
+        baseline = min(
+            baseline,
+            min(primitive.control1.y, primitive.control2.y) -
+                s.annotationGap -
+                size * 0.25);
       }
     }
-    final symbols = [...score.chordSymbols]
-      ..sort((a, b) => (anchorX[a.elementId] ?? 0).compareTo(anchorX[b.elementId] ?? 0));
+    final symbols = [...score.chordSymbols]..sort((a, b) =>
+        (anchorX[a.elementId] ?? 0).compareTo(anchorX[b.elementId] ?? 0));
     final centers = <double>[];
     final halves = <double>[];
     final valid = <ChordSymbol>[];
@@ -148,19 +155,20 @@ extension _JianpuOverlays on _JianpuBuilder {
     final rowEnds = <double>[];
     for (var i = 0; i < valid.length; i++) {
       var row = 0;
-      while (row < rowEnds.length && centers[i] - halves[i] < rowEnds[row] + 0.4 * size) {
+      while (row < rowEnds.length &&
+          centers[i] - halves[i] < rowEnds[row] + 0.4 * size) {
         row++;
       }
       if (row == rowEnds.length) rowEnds.add(0);
       rowEnds[row] = centers[i] + halves[i];
-      primitives.add(TextPrimitive(valid[i].text, Point(centers[i], baseline - row * size * 1.5),
-          size: size, elementId: valid[i].elementId));
+      primitives.add(TextPrimitive(
+          valid[i].text, Point(centers[i], baseline - row * size * 1.5),
+          size: size, cssClass: 'score-chord', elementId: valid[i].elementId));
       x = max(x, centers[i] + halves[i] + 0.3);
     }
   }
 
-  /// Draws lyrics: syllables grouped into verses, stacked below the digit row,
-  /// nudged right to avoid horizontal overlap.
+  /// Draws lyrics: syllables grouped into verses and stacked below the digit row.
   void layoutLyrics() {
     if (score.lyrics.isEmpty) return;
     final size = s.lyricSize;
@@ -180,27 +188,21 @@ extension _JianpuOverlays on _JianpuBuilder {
       // below the following notes that carry none.
       final lyricIds = {for (final l in lyrics) l.elementId};
 
-      final centers = <double>[];
-      final halfWidths = <double>[];
-      final valid = <int>[];
-      for (var i = 0; i < lyrics.length; i++) {
-        final at = anchorX[lyrics[i].elementId];
-        if (at == null) continue;
-        centers.add(at);
-        halfWidths.add(_estTextHalfWidth(lyrics[i].text, size));
-        valid.add(i);
-      }
-      _spreadRight(centers, halfWidths, 0.8 * size);
-
       final notesInOrder = [
         for (final measure in score.measures)
           ...measure.elements.whereType<NoteElement>(),
       ];
 
-      for (var j = 0; j < valid.length; j++) {
-        final lyric = lyrics[valid[j]];
-        primitives.add(TextPrimitive(lyric.text, Point(centers[j], baselineY),
-            size: size));
+      for (final lyric in lyrics) {
+        final at = anchorX[lyric.elementId];
+        if (at == null) continue;
+        primitives.add(TextPrimitive(
+          lyric.text,
+          Point(at, baselineY),
+          size: size,
+          fontWeight: 400,
+          cssClass: 'score-lyric',
+        ));
 
         if (lyric.extender) {
           // Extender: from the syllable's right edge along the baseline,
@@ -215,7 +217,7 @@ extension _JianpuOverlays on _JianpuBuilder {
               endX = anchorX[id];
             }
           }
-          final startX = centers[j] + halfWidths[j] + 0.15;
+          final startX = at + _estTextHalfWidth(lyric.text, size) + 0.15;
           if (endX != null && endX > startX + 0.2) {
             primitives.add(LinePrimitive(
                 Point(startX, baselineY), Point(endX, baselineY),

@@ -4,6 +4,8 @@ library;
 import '../smufl/smufl_metadata.dart';
 import '../theory/pitch.dart';
 
+enum SpacingPolicy { optical, equalBeat }
+
 /// A notehead shape-scheme that maps each pitch to a shape by its movable-do
 /// scale degree in the current key.
 enum NoteheadScheme {
@@ -107,6 +109,8 @@ class LayoutSettings {
   /// diamond always wins).
   final NoteheadScheme noteheadScheme;
 
+  final SpacingPolicy spacingPolicy;
+
   /// Gap between a notehead and its first augmentation dot.
   final double dotGap;
 
@@ -169,6 +173,7 @@ class LayoutSettings {
     this.accidentalGap = 0.25,
     this.microtonalGlyphs = const {},
     this.noteheadScheme = NoteheadScheme.normal,
+    this.spacingPolicy = SpacingPolicy.optical,
     this.dotGap = 0.35,
     this.dotSpacing = 0.35,
     this.barlineGap = 1.0,
@@ -176,7 +181,7 @@ class LayoutSettings {
     this.spacingBase = 1.8,
     this.spacingPerLog2 = 0.75,
     this.verticalPadding = 0.5,
-    this.lyricSize = 1.6,
+    this.lyricSize = 1.7,
     this.lyricGap = 0.8,
     this.annotationSize = 1.8,
     this.annotationGap = 0.5,

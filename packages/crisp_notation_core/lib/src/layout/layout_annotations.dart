@@ -178,6 +178,8 @@ extension _Annotations on _LayoutBuilder {
           lyric.text,
           Point(centerX, baselineY),
           size: size,
+          fontWeight: 400,
+          cssClass: 'score-lyric',
           elementId: lyric.elementId,
         ));
         _expand(
@@ -188,7 +190,9 @@ extension _Annotations on _LayoutBuilder {
           baselineY + 0.25 * size,
         );
 
-        if (lyric.hyphenToNext && j + 1 < valid.length && valid[j + 1] == i + 1) {
+        if (lyric.hyphenToNext &&
+            j + 1 < valid.length &&
+            valid[j + 1] == i + 1) {
           // Dash centered between this syllable's end and the next one's
           // start, on the x-height line.
           final nextCenterX = centers[j + 1];
@@ -265,39 +269,44 @@ extension _Annotations on _LayoutBuilder {
         if (info.id != null) info.id!: info,
     };
 
-    final aboveItems = <(String, String)>[
+    final aboveItems = <(String, String, bool)>[
       for (final a in score.annotations)
-        if (a.placement == AnnotationPlacement.above) (a.elementId, a.text),
-      for (final c in score.chordSymbols) (c.elementId, c.text),
+        if (a.placement == AnnotationPlacement.above)
+          (a.elementId, a.text, false),
+      for (final c in score.chordSymbols) (c.elementId, c.text, true),
     ];
-    final belowItems = <(String, String)>[
+    final belowItems = <(String, String, bool)>[
       for (final a in score.annotations)
-        if (a.placement == AnnotationPlacement.below) (a.elementId, a.text),
+        if (a.placement == AnnotationPlacement.below)
+          (a.elementId, a.text, false),
     ];
 
-    void layoutRow(List<(String, String)> items, {required bool above}) {
+    void layoutRow(List<(String, String, bool)> items, {required bool above}) {
       if (items.isEmpty) return;
       // Gather each item's note-centered anchor and estimated half-width, then
       // order left-to-right and spread so wide symbols on close notes never
       // overlap.
-      final placed =
-          <(String, String, double, double)>[]; // id, text, ctr, half
-      for (final (id, text) in items) {
+      final placed = <(String, String, bool, double, double)>[];
+      // id, text, isChord, center, half width
+      for (final (id, text, isChord) in items) {
         final info = infoOf[id];
-        if (info == null || (info.note == null && !score.chordSymbols.any((symbol) => symbol.elementId == id))) {
+        if (info == null ||
+            (info.note == null &&
+                !score.chordSymbols.any((symbol) => symbol.elementId == id))) {
           throw ArgumentError(
               'annotation/chord symbol references an unknown note id: $id');
         }
         placed.add((
           id,
           text,
+          isChord,
           (info.left + info.right) / 2,
           _estTextHalfWidth(text, size),
         ));
       }
-      placed.sort((a, b) => a.$3.compareTo(b.$3));
-      final centers = [for (final p in placed) p.$3];
-      final halves = [for (final p in placed) p.$4];
+      placed.sort((a, b) => a.$4.compareTo(b.$4));
+      final centers = [for (final p in placed) p.$4];
+      final halves = [for (final p in placed) p.$5];
       _spreadRight(centers, halves, 0.4 * size);
 
       // The row clears the local skyline under the text span, not unrelated
@@ -320,12 +329,13 @@ extension _Annotations on _LayoutBuilder {
                   0.72 * size);
 
       for (var i = 0; i < placed.length; i++) {
-        final (id, text, _, halfWidth) = placed[i];
+        final (id, text, isChord, _, halfWidth) = placed[i];
         final centerX = centers[i];
         _primitives.add(TextPrimitive(
           text,
           Point(centerX, baselineY),
           size: size,
+          cssClass: isChord ? 'score-chord' : null,
           elementId: id,
         ));
         _expand(

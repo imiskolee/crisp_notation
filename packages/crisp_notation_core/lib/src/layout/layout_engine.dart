@@ -68,6 +68,8 @@ class LayoutEngine {
     Score score,
     LayoutSettings settings, {
     double? leadingWidth,
+    List<double>? measureStartXs,
+    double? minimumWidth,
     List<double>? measureWidths,
     double? targetWidth,
     double spacingStretch = 1.0,
@@ -89,6 +91,8 @@ class LayoutEngine {
         score,
         settings,
         leadingWidth: leadingWidth,
+        measureStartXs: measureStartXs,
+        minimumWidth: minimumWidth,
         measureWidths: measureWidths,
         targetWidth: targetWidth,
         spacingStretch: spacingStretch,
@@ -109,9 +113,13 @@ class LayoutEngine {
 }
 
 class _LayoutBuilder {
+  static const double _fixedTimelineVisualOffset = 2 / 7.5;
+
   final Score score;
   final LayoutSettings s;
   final double? leadingWidth;
+  final List<double>? measureStartXs;
+  final double? minimumWidth;
   final List<double>? measureWidths;
   final double? targetWidth;
   final double spacingStretch;
@@ -265,6 +273,8 @@ class _LayoutBuilder {
     this.score,
     this.s, {
     this.leadingWidth,
+    this.measureStartXs,
+    this.minimumWidth,
     this.measureWidths,
     this.targetWidth,
     this.spacingStretch = 1.0,
@@ -304,6 +314,7 @@ class _LayoutBuilder {
       final measure = score.measures[i];
       _applyMeasureChanges(measure);
       if (measure.startRepeat) _addStartRepeat();
+      if (measureStartXs != null) _x = measureStartXs![i];
       final startX = _x;
       _layoutMeasure(measure, i);
       final widths = measureWidths;
@@ -317,7 +328,11 @@ class _LayoutBuilder {
       if (measure.endRepeat) {
         _addEndRepeat();
       } else if (i < score.measures.length - 1) {
-        _addBarline(measure.barline);
+        _addBarline(
+          measure.barline,
+          visualOffset:
+              measureStartXs == null ? 0 : -_fixedTimelineVisualOffset,
+        );
       }
     }
     _layoutCrossMeasureBeams();
@@ -343,7 +358,7 @@ class _LayoutBuilder {
     _layoutChordDiagrams();
     _layoutBeatNumbers();
     _layoutMeasureNumbers();
-    final width = _addFinalBarline();
+    final width = max(_addFinalBarline(), minimumWidth ?? 0);
 
     // Staff lines span the full width; paint them first.
     final staffLines = [
@@ -612,7 +627,14 @@ class _LayoutBuilder {
       // the whole measure, though, is centered in the grid-fixed measure
       // (standard engraving rule), not pinned to the onset-0 column.
       final columnX = columns == null ? null : columns[onset];
-      final centerRest = columns != null &&
+      final visualColumnX = columnX != null &&
+              measureStartXs != null &&
+              measureIndex > 0 &&
+              onset == Fraction.zero
+          ? columnX + _fixedTimelineVisualOffset
+          : columnX;
+      final centerRest = measureStartXs == null &&
+          columns != null &&
           element is RestElement &&
           element.duration.toFraction() == gridMeasureEnd;
       if (centerRest) {
@@ -621,7 +643,9 @@ class _LayoutBuilder {
         _x = measureContentStart + columnX;
       }
       _applyInlineClefs(measure, onset);
-      final columnNoteX = centerRest || columnX == null ? null : _x;
+      final columnNoteX = centerRest || visualColumnX == null
+          ? null
+          : measureContentStart + visualColumnX;
       onset += measure.effectiveDurationAt(i);
       switch (element) {
         case NoteElement():
@@ -780,6 +804,10 @@ class _LayoutBuilder {
       }
       _applyInlineClefs(measure, onset);
       final columnX = _x;
+      final visualColumnX =
+          measureStartXs != null && measureIndex > 0 && onset == Fraction.zero
+              ? columnX + _fixedTimelineVisualOffset
+              : columnX;
       final nextOnset = c + 1 < distinct.length ? distinct[c + 1] : measureEnd;
       final delta = nextOnset - onset;
       var idealEnd = columnX;
@@ -840,8 +868,9 @@ class _LayoutBuilder {
           }
           if (jointShown.isNotEmpty) {
             final acc = _accidentalColumns(jointShown);
-            columnNoteX =
-                forced?[onset] == null ? columnX + acc.preWidth : columnX;
+            columnNoteX = forced?[onset] == null
+                ? visualColumnX + acc.preWidth
+                : visualColumnX;
             _drawAccidentalColumns(acc, columnNoteX);
           }
         }
@@ -856,6 +885,7 @@ class _LayoutBuilder {
         final element = voices[v][i];
         tieIndexPerVoice[v][i] = _tieInfos.length;
         _x = columnX;
+        var forcedNoteX = visualColumnX;
         if (element is NoteElement && placedPositions.isNotEmpty) {
           final myPositions = [
             for (final pitch in element.pitches)
@@ -866,6 +896,7 @@ class _LayoutBuilder {
           );
           if (collides) {
             _x = columnX + _glyphWidth(SmuflGlyph.noteheadWhole) + 0.55;
+            forcedNoteX = _x + visualColumnX - columnX;
           }
         }
         switch (element) {
@@ -884,7 +915,7 @@ class _LayoutBuilder {
               deferStem: crossStaff || cm != null || group != null,
               voice: v,
               noteXOverride:
-                  columnNoteX ?? (forced?[onset] == null ? null : _x),
+                  columnNoteX ?? (forced?[onset] == null ? null : forcedNoteX),
             );
             if (crossStaff) {
               _recordCrossStaffStub(element.id, result.beamed);
@@ -900,7 +931,8 @@ class _LayoutBuilder {
             idealEnd = max(idealEnd, result.noteX + _idealAdvance(delta));
             inkRight = max(inkRight, result.inkRight);
           case RestElement():
-            final fullRest = gridMeasureEnd != null &&
+            final fullRest = measureStartXs == null &&
+                gridMeasureEnd != null &&
                 onset == Fraction.zero &&
                 effectiveAt(v, i) == gridMeasureEnd;
             if (fullRest) {

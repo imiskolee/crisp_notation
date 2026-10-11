@@ -106,6 +106,25 @@ void main() {
       expect(digitsOf(layout).map((d) => d.text), ['1', '0', '2']);
     });
 
+    test('degree digits and rests use the stronger publication style', () {
+      final layout = jianpuOf(Score.simple(notes: 'c4:q r:q'));
+      final digits = digitsOf(layout);
+
+      expect(digits.map((d) => d.size), everyElement(2.1));
+
+      final svg = scoreToSvg(layout, staffSpace: 10);
+      expect(
+        RegExp(r'<text[^>]*font-size="2.1"[^>]*font-weight="600"[^>]*>1</text>')
+            .hasMatch(svg),
+        isTrue,
+      );
+      expect(
+        RegExp(r'<text[^>]*font-size="2.1"[^>]*font-weight="600"[^>]*>0</text>')
+            .hasMatch(svg),
+        isTrue,
+      );
+    });
+
     // GB/T 46845-2025 §6.3.7.2 / §6.3.8.6:
     // 二分/全休止符不用增时线，用增加四分休止符个数的办法构成。
     test('half rest expands to two quarter rests (0 0, no dash)', () {
@@ -566,6 +585,7 @@ void main() {
       expect(line.from.x, lessThan(d.position.x));
       expect(line.to.x, greaterThan(d.position.x));
       expect(line.to.x - line.from.x, lessThan(1.6));
+      expect(line.thickness, 0.18);
     });
 
     test('a quarter note breaks a group across beats', () {
@@ -959,8 +979,58 @@ void main() {
       }
     });
 
-    test('melisma extender: line runs under following syllable-less notes',
-        () {
+    test('lyrics use regular weight and the score-lyric CSS class', () {
+      final layout = jianpuOf(Score.simple(
+        notes: 'c4:e d4',
+        timeSignature: TimeSignature.commonTime,
+        lyrics: 'la li',
+      ));
+      final lyrics = layout.primitives
+          .whereType<TextPrimitive>()
+          .where((t) => t.text == 'la' || t.text == 'li')
+          .toList();
+
+      expect(lyrics, hasLength(2));
+      expect(
+        lyrics.map((lyric) => (lyric.fontWeight, lyric.cssClass)),
+        everyElement((400, 'score-lyric')),
+      );
+    });
+
+    test('compact beamed eighth lyrics stay centered on their digits', () {
+      const lyricTexts = ['中华人民共和国', '万里长城永不倒'];
+      final score = Score.simple(
+        notes: 'c4:e d4',
+        timeSignature: TimeSignature.commonTime,
+        lyrics: lyricTexts.join(' '),
+      );
+      final layout = const JianpuLayoutEngine().layout(
+        score,
+        settings,
+        forcedColumns: [
+          {
+            Fraction.zero: 0,
+            Fraction(1, 8): 1,
+            Fraction(1, 4): 2,
+          },
+        ],
+      );
+      final digits = digitsOf(layout);
+      final lyrics = [
+        for (final text in lyricTexts)
+          layout.primitives
+              .whereType<TextPrimitive>()
+              .singleWhere((t) => t.text == text),
+      ];
+
+      expect(digits, hasLength(2));
+      for (var i = 0; i < lyrics.length; i++) {
+        expect(lyrics[i].position.x, digits[i].position.x,
+            reason: '第 ${i + 1} 个歌词必须以对应数字中心为锚点');
+      }
+    });
+
+    test('melisma extender: line runs under following syllable-less notes', () {
       // 延音线：从「啦」右缘延伸，穿过无词的 tie 续音与后续音符，
       // 到下一个带词音符（「咪」）前停止。
       final layout = jianpuOf(Score.simple(
@@ -1376,7 +1446,7 @@ void main() {
       expect(ys, {1.95, 2.65});
     });
 
-    test('high and low octave dots sit at the same gap from the digit box', () {
+    test('high octave dots have one extra pixel of clearance', () {
       final hiY = jianpuOf(Score.simple(notes: 'c5:q'))
           .primitives
           .whereType<GlyphPrimitive>()
@@ -1391,7 +1461,7 @@ void main() {
           .y;
       final hiGap = JianpuLayoutEngine.digitTop - hiY;
       final loGap = loY - JianpuLayoutEngine.digitBaseline;
-      expect(hiGap, closeTo(loGap, 1e-9));
+      expect(hiGap, closeTo(loGap + 1 / 7.5, 1e-9));
     });
 
     test('accidental prefix hugs the digit at the universal gap', () {

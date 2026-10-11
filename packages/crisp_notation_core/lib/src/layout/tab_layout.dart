@@ -66,6 +66,8 @@ class TabLayoutEngine {
     int capo = 0,
     bool showTuning = false,
     double? leadingWidth,
+    List<double>? measureStartXs,
+    double? minimumWidth,
     List<double>? barlineXs,
     List<double>? measureWidths,
     List<Map<Fraction, double>>? forcedColumns,
@@ -126,6 +128,7 @@ class TabLayoutEngine {
 
     for (var m = 0; m < score.measures.length; m++) {
       final measure = score.measures[m];
+      if (measureStartXs != null) x = measureStartXs[m];
       final startX = x;
       final cols = <_Col>[];
       var onset = Fraction.zero;
@@ -262,7 +265,7 @@ class TabLayoutEngine {
       }
     }
 
-    final width = x;
+    final width = max(x, minimumWidth ?? 0);
 
     // Rhythm: stems, flags and beams below the staff.
     final beatUnit = score.timeSignature?.beatUnit ?? 4;

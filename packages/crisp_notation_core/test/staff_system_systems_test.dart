@@ -252,6 +252,12 @@ void main() {
     expect(withTitle, contains('>Sonata No. 16<'));
     expect(withTitle, contains('>1st Movement<'));
     expect(withTitle, contains('>Wolfgang Amadeus Mozart<'));
+    expect(withTitle, contains('font-size="22.8" font-weight="700"'));
+    expect(withTitle, contains('font-size="13.8" font-weight="400"'));
+    expect(withTitle, contains('font-size="11.4"'));
+    final firstSystemY = RegExp(r'<g transform="translate\(0 133.2\)').firstMatch(withTitle)?.start;
+    expect(firstSystemY, isNotNull);
+    expect(withTitle.indexOf('>Sonata No. 16<'), lessThan(firstSystemY!));
     expect(withTitle.length, greaterThan(withoutTitle.length));
   });
 

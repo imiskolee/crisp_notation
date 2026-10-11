@@ -92,67 +92,92 @@ extension _Barlines on _LayoutBuilder {
   }
 
   /// A mid-score barline in the requested [style] (the measure's right edge).
-  void _addBarline(BarlineStyle style) {
+  void _addBarline(BarlineStyle style, {double visualOffset = 0}) {
+    final anchorX = _x;
+    final drawX = anchorX + visualOffset;
     switch (style) {
       case BarlineStyle.normal:
-        _addLine(Point(_x, 0), Point(_x, 4), s.thinBarlineThickness);
-        _x += s.thinBarlineThickness + s.barlineGap;
+        _addLine(Point(drawX, 0), Point(drawX, 4), s.thinBarlineThickness);
+        _x = anchorX + s.thinBarlineThickness + s.barlineGap;
       case BarlineStyle.doubleBar:
-        _addLine(Point(_x, 0), Point(_x, 4), s.thinBarlineThickness);
-        final x2 = _x + s.thinBarlineThickness + s.barlineSeparation;
+        _addLine(Point(drawX, 0), Point(drawX, 4), s.thinBarlineThickness);
+        final x2 = drawX + s.thinBarlineThickness + s.barlineSeparation;
         _addLine(Point(x2, 0), Point(x2, 4), s.thinBarlineThickness);
-        _x = x2 + s.thinBarlineThickness + s.barlineGap;
+        _x = anchorX +
+            2 * s.thinBarlineThickness +
+            s.barlineSeparation +
+            s.barlineGap;
       case BarlineStyle.finalBar:
-        _addLine(Point(_x, 0), Point(_x, 4), s.thinBarlineThickness);
-        final xt = _x +
+        _addLine(Point(drawX, 0), Point(drawX, 4), s.thinBarlineThickness);
+        final xt = drawX +
             s.thinBarlineThickness / 2 +
             s.barlineSeparation +
             s.thickBarlineThickness / 2;
         _addLine(Point(xt, 0), Point(xt, 4), s.thickBarlineThickness);
-        _x = xt + s.thickBarlineThickness / 2 + s.barlineGap;
+        _x = anchorX +
+            s.thinBarlineThickness / 2 +
+            s.barlineSeparation +
+            s.thickBarlineThickness +
+            s.barlineGap;
       case BarlineStyle.heavy:
-        final xt = _x + s.thickBarlineThickness / 2;
+        final xt = drawX + s.thickBarlineThickness / 2;
         _addLine(Point(xt, 0), Point(xt, 4), s.thickBarlineThickness);
-        _x = xt + s.thickBarlineThickness / 2 + s.barlineGap;
+        _x = anchorX + s.thickBarlineThickness + s.barlineGap;
       case BarlineStyle.dashed:
-        _addSegmentedBarline(dash: 0.5, gap: 0.4, round: false);
+        _addSegmentedBarline(
+            dash: 0.5, gap: 0.4, round: false, visualOffset: visualOffset);
       case BarlineStyle.dotted:
-        _addSegmentedBarline(dash: 0.02, gap: 0.32, round: true);
+        _addSegmentedBarline(
+            dash: 0.02, gap: 0.32, round: true, visualOffset: visualOffset);
       case BarlineStyle.tick:
         // A short stroke crossing only the top staff line.
-        _addLine(Point(_x, -0.75), Point(_x, 0.75), s.thinBarlineThickness);
-        _x += s.thinBarlineThickness + s.barlineGap;
+        _addLine(
+            Point(drawX, -0.75), Point(drawX, 0.75), s.thinBarlineThickness);
+        _x = anchorX + s.thinBarlineThickness + s.barlineGap;
       case BarlineStyle.short:
         // A short stroke spanning the middle staff lines (2nd from top/bottom).
-        _addLine(Point(_x, 1), Point(_x, 3), s.thinBarlineThickness);
-        _x += s.thinBarlineThickness + s.barlineGap;
+        _addLine(Point(drawX, 1), Point(drawX, 3), s.thinBarlineThickness);
+        _x = anchorX + s.thinBarlineThickness + s.barlineGap;
       case BarlineStyle.reverseFinal:
         // Thick + thin — the mirror of a final barline.
-        final xt = _x + s.thickBarlineThickness / 2;
+        final xt = drawX + s.thickBarlineThickness / 2;
         _addLine(Point(xt, 0), Point(xt, 4), s.thickBarlineThickness);
         final xthin = xt +
             s.thickBarlineThickness / 2 +
             s.barlineSeparation +
             s.thinBarlineThickness / 2;
         _addLine(Point(xthin, 0), Point(xthin, 4), s.thinBarlineThickness);
-        _x = xthin + s.thinBarlineThickness / 2 + s.barlineGap;
+        _x = anchorX +
+            s.thickBarlineThickness +
+            s.barlineSeparation +
+            s.thinBarlineThickness +
+            s.barlineGap;
       case BarlineStyle.none:
-        _x += s.barlineGap;
+        _x = anchorX + s.barlineGap;
     }
   }
 
   /// A vertical barline drawn as short segments (dashed or, with [round],
   /// dotted), spanning the five staff lines.
-  void _addSegmentedBarline(
-      {required double dash, required double gap, required bool round}) {
+  void _addSegmentedBarline({
+    required double dash,
+    required double gap,
+    required bool round,
+    double visualOffset = 0,
+  }) {
+    final anchorX = _x;
+    final drawX = anchorX + visualOffset;
     var y = 0.0;
     while (y <= 4 + 1e-9) {
       _addLine(
-          Point(_x, y), Point(_x, min(y + dash, 4)), s.thinBarlineThickness,
-          round: round);
+        Point(drawX, y),
+        Point(drawX, min(y + dash, 4)),
+        s.thinBarlineThickness,
+        round: round,
+      );
       y += dash + gap;
     }
-    _x += s.thinBarlineThickness + s.barlineGap;
+    _x = anchorX + s.thinBarlineThickness + s.barlineGap;
   }
 
   /// Rule 13: `barlineFinal` (thin + thick) at the end; returns the width.

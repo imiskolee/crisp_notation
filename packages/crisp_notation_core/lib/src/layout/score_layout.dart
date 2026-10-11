@@ -93,11 +93,19 @@ final class TextPrimitive extends LayoutPrimitive {
   /// Em size (font size) in staff spaces.
   final double size;
 
+  /// Optional CSS-compatible numeric font weight.
+  final int? fontWeight;
+
+  /// Optional semantic CSS class emitted by SVG renderers.
+  final String? cssClass;
+
   /// Creates a text primitive.
   const TextPrimitive(
     this.text,
     this.position, {
     required this.size,
+    this.fontWeight,
+    this.cssClass,
     super.elementId,
   });
 

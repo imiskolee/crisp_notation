@@ -354,7 +354,7 @@ w:Mar- y had a lit- tle lamb whose fleece was white as snow.
       expect(s.keySignature.fifths, -1); // D minor
       expect(s.timeSignature, const TimeSignature(3, 4));
       expect(s.measures.length, greaterThan(10));
-      expect(s.annotations, isNotEmpty); // "Dm" "A7" …
+      expect(s.chordSymbols, isNotEmpty); // "Dm" "A7" …
       expect(s.measures.any((m) => m.volta == 1), isTrue); // |1 …:|2
     });
 
@@ -467,21 +467,24 @@ w:Mar- y had a lit- tle lamb whose fleece was white as snow.
   });
 
   group('tempo, parts, continuation', () {
-    test('Q: 1/4=120 becomes a metronome annotation on the first note', () {
+    test('header Q: sets the initial tempo without an annotation', () {
       final score = scoreFromAbc('X:1\nM:4/4\nL:1/4\nQ:1/4=120\nK:C\nCDEF|\n');
-      final first = score.measures.first.elements.first;
-      expect(score.annotations, contains(Annotation(first.id!, '♩ = 120')));
+      expect(score.tempo, const Tempo(120));
+      expect(score.annotations.map((a) => a.text), isNot(contains('♩ = 120')));
     });
 
-    test('Q: with a quoted label combines label and mark', () {
+    test('header Q: label does not become a visible annotation', () {
       final score =
           scoreFromAbc('X:1\nM:4/4\nL:1/4\nQ:"Allegro" 1/4=120\nK:C\nCDEF|\n');
-      expect(score.annotations.map((a) => a.text), contains('Allegro ♩ = 120'));
+      expect(score.tempo, const Tempo(120));
+      expect(score.annotations.map((a) => a.text),
+          isNot(contains('Allegro ♩ = 120')));
     });
 
-    test('bare Q:120 assumes a quarter-note beat', () {
+    test('bare header Q:120 assumes a quarter-note beat', () {
       final score = scoreFromAbc('X:1\nM:4/4\nL:1/4\nQ:120\nK:C\nCDEF|\n');
-      expect(score.annotations.map((a) => a.text), contains('♩ = 120'));
+      expect(score.tempo, const Tempo(120));
+      expect(score.annotations.map((a) => a.text), isNot(contains('♩ = 120')));
     });
 
     test('mid-tune P: part label becomes an annotation', () {
@@ -497,8 +500,9 @@ w:Mar- y had a lit- tle lamb whose fleece was white as snow.
           'CDEF|\n'
           'Q:1/4=90\n'
           'GABc|\n');
-      expect(score.annotations.map((a) => a.text),
-          containsAll(['♩ = 120', '♩ = 90']));
+      expect(score.tempo, const Tempo(120));
+      expect(score.measures[1].tempoChange, const Tempo(90));
+      expect(score.annotations.map((a) => a.text), ['♩ = 90']);
     });
 
     test('a trailing backslash continues the line without a stray token', () {
@@ -521,11 +525,13 @@ w:Mar- y had a lit- tle lamb whose fleece was white as snow.
       expect(s.measures[0].barline, BarlineStyle.normal);
     });
 
-    test('in a multi-voice tune the tempo sits on the top staff only', () {
+    test('in a multi-voice tune header tempo stays non-visible', () {
       final sys = staffSystemFromAbc('X:1\nM:4/4\nL:1/4\nQ:1/4=100\nK:C\n'
           'V:1\nCDEF|\n'
           'V:2\nGABc|\n');
-      expect(sys.staves[0].annotations.map((a) => a.text), contains('♩ = 100'));
+      expect(sys.staves[0].tempo, const Tempo(100));
+      expect(sys.staves[0].annotations.map((a) => a.text),
+          isNot(contains('♩ = 100')));
       expect(sys.staves[1].annotations.map((a) => a.text),
           isNot(contains('♩ = 100')));
     });

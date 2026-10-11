@@ -64,10 +64,10 @@ void _spreadRight(List<double> centers, List<double> halfWidths, double gap) {
 const double _digitBaseline = 3.0;
 
 /// Em size of a degree digit, in staff spaces.
-const double _digitSize = 2.0;
+const double _digitSize = 2.1;
 
 /// Ink top of a degree digit (cap height ≈ 0.68 em above the baseline).
-const double _digitTop = 1.64;
+const double _digitTop = _digitBaseline - 0.68 * _digitSize;
 
 /// Half the typical ink width of a degree digit.
 const double _digitInkHalf = 0.45;
@@ -84,11 +84,14 @@ const double _dotHalf = 0.20;
 /// Stacked-octave-dot pitch: 2·_dotHalf + 0.05 层叠净距.
 const double _dotStep = 0.45;
 
-/// Half the underline thickness (0.16 ÷ 2).
-const double _lineHalf = 0.08;
+/// Extra upward clearance for high-octave dots: 1 px at 7.5 px/staff-space.
+const double _highOctaveDotLift = 1 / 7.5;
 
-/// First 减时线 underline: digitBaseline + _symbolGap + _lineHalf = 3.23.
-const double _underlineY = 3.23;
+/// Half the underline thickness (0.20 ÷ 2).
+const double _lineHalf = 0.10;
+
+/// First 减时线 underline, preserving the universal symbol gap.
+const double _underlineY = _digitBaseline + _symbolGap + _lineHalf;
 const double _underlineStep = 0.35;
 const double _underlinePad = 0.45;
 
@@ -200,6 +203,8 @@ class JianpuLayoutEngine {
     Score score,
     LayoutSettings settings, {
     double? leadingWidth,
+    List<double>? measureStartXs,
+    double? minimumWidth,
     List<double>? measureWidths,
     List<Map<Fraction, double>>? forcedColumns,
     List<double>? barlineXs,
@@ -213,6 +218,8 @@ class JianpuLayoutEngine {
         score: score,
         s: settings,
         leadingWidth: leadingWidth,
+        measureStartXs: measureStartXs,
+        minimumWidth: minimumWidth,
         measureWidths: measureWidths,
         forcedColumns: forcedColumns,
         barlineXs: barlineXs,
@@ -335,6 +342,8 @@ class _JianpuBuilder {
   final double? leadingWidth;
   final List<double>? measureWidths;
   final List<Map<Fraction, double>>? forcedColumns;
+  final List<double>? measureStartXs;
+  final double? minimumWidth;
   final List<double>? barlineXs;
   final double spacingStretch;
   final bool drawTimeSignature;
@@ -372,6 +381,8 @@ class _JianpuBuilder {
     this.leadingWidth,
     this.measureWidths,
     this.forcedColumns,
+    this.measureStartXs,
+    this.minimumWidth,
     this.barlineXs,
     this.spacingStretch = 1.0,
     this.drawTimeSignature = false,
@@ -507,8 +518,13 @@ class _JianpuBuilder {
           m < score.measures.length - 1 && score.measures[m + 1].startRepeat;
       final combinedRepeatWithNext = measure.endRepeat && nextHasStartRepeat;
       if (measure.startRepeat && m > 0 && !prevHadEndRepeat) {
-        x = startRepeat(x);
+        if (measureStartXs != null) {
+          startRepeat(measureStartXs![m] - startRepeatWidth());
+        } else {
+          x = startRepeat(x);
+        }
       }
+      if (measureStartXs != null) x = measureStartXs![m];
       final startX = x;
 
       // §2.9 cross-staff gridding.
@@ -597,7 +613,7 @@ class _JianpuBuilder {
       deepestUnderline = max(deepestUnderline, layoutUnderlines(cols));
 
       // Barline position.
-      var barX = max(x, startX + 2.0);
+      var barX = measureStartXs == null ? max(x, startX + 2.0) : x;
       if (measureWidths != null && m < measureWidths!.length) {
         barX = max(barX, startX + measureWidths![m]);
       }
@@ -613,11 +629,14 @@ class _JianpuBuilder {
       final barlineStyle = isLast && measure.barline == BarlineStyle.normal
           ? (finalBarline ? BarlineStyle.finalBar : BarlineStyle.normal)
           : measure.barline;
+      final drawBarX = measureStartXs != null && !isLast
+          ? barX - _digitInkHalf - _symbolGap
+          : barX;
       final end = combinedRepeatWithNext
-          ? combinedRepeat(barX)
+          ? combinedRepeat(drawBarX)
           : measure.endRepeat
-              ? endRepeat(barX)
-              : closingBarline(barX, barlineStyle);
+              ? endRepeat(drawBarX)
+              : closingBarline(drawBarX, barlineStyle);
       measureRegions.add(MeasureRegion(m, startX: startX, endX: barX));
 
       final isDefaultLast = isLast &&
@@ -642,6 +661,7 @@ class _JianpuBuilder {
     layoutAnnotations();
     layoutLyrics();
 
+    x = max(x, minimumWidth ?? 0);
     return finalizeInkBounds();
   }
 }

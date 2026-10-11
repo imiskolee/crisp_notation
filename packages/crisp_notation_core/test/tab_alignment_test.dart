@@ -983,6 +983,273 @@ z6 | z6 |
       });
     }
 
+    test('equalBeat spaces sparse TAB and jianpu rests evenly', () {
+      final staves = [
+        tabScore('e4:h e4:h'),
+        jianpuScore('r:q r:e r:e r:q r:q'),
+      ];
+      final equalBeat = LayoutSettings(
+        metadata: metadata,
+        spacingPolicy: SpacingPolicy.equalBeat,
+      );
+      final optical = alignedColumns(staves, settings).single;
+      final columns = alignedColumns(staves, equalBeat).single;
+      final start = columns[Fraction.zero]!;
+      final end = columns[Fraction(1, 1)]!;
+      expect(columns.keys.toSet(), optical.keys.toSet());
+      expect(start, optical[Fraction.zero]);
+      expect(end, optical[Fraction(1, 1)]);
+      for (final time in columns.keys) {
+        expect(columns[time],
+            closeTo(start + (end - start) * time.toDouble(), 1e-9));
+      }
+      expect(columns[Fraction(1, 4)],
+          isNot(closeTo(optical[Fraction(1, 4)]!, 1e-6)));
+      final layout = layoutStaffSystem(StaffSystem(staves), equalBeat);
+      final tab = onsetAnchors(staves[0], layout.staves[0]);
+      final rests = onsetAnchors(staves[1], layout.staves[1]);
+      for (final time in [Fraction.zero, Fraction(1, 2)]) {
+        expect(tab[(0, time)], closeTo(rests[(0, time)]!, 1e-9));
+      }
+      for (var beat = 0; beat < 3; beat++) {
+        expect(
+            rests[(0, Fraction(beat + 1, 4))]! - rests[(0, Fraction(beat, 4))]!,
+            closeTo((end - start) / 4, 1e-9));
+      }
+    });
+
+    test('equalBeat falls back for dense ink and becomes linear when stretched',
+        () {
+      final staves = [jianpuScore('c4:e. c#4:s d4:h.')];
+      final equalBeat = LayoutSettings(
+        metadata: metadata,
+        spacingPolicy: SpacingPolicy.equalBeat,
+      );
+      final optical = alignedColumns(staves, settings).single;
+      final columns = alignedColumns(staves, equalBeat).single;
+      expect(columns, optical);
+      final naturalWidth = optical[Fraction(1, 1)]! - optical[Fraction.zero]!;
+      final denseGap = optical[Fraction(1, 4)]! - optical[Fraction(3, 16)]!;
+      expect(naturalWidth / 16, lessThan(denseGap));
+      final stretched =
+          alignedColumns(staves, equalBeat, spacingStretch: 8).single;
+      final start = stretched[Fraction.zero]!;
+      final end = stretched[Fraction(1, 1)]!;
+      expect(start, optical[Fraction.zero]);
+      expect(end - start, closeTo(naturalWidth * 8, 1e-9));
+      for (final time in stretched.keys) {
+        expect(stretched[time],
+            closeTo(start + (end - start) * time.toDouble(), 1e-9));
+      }
+    });
+
+    for (final notes in ['r:h. c4:q', 'c4:h. r:q']) {
+      test('equalBeat checks derived duration ink in $notes', () {
+        final score = jianpuScore(notes);
+        final staves = [score];
+        final equalBeat = LayoutSettings(
+            metadata: metadata, spacingPolicy: SpacingPolicy.equalBeat);
+        final optical =
+            alignedColumns(staves, settings, spacingStretch: 0.7).single;
+        final start = optical[Fraction.zero]!;
+        final width = optical[Fraction(1, 1)]! - start;
+        final candidate = {
+          for (final time in optical.keys)
+            time: start + width * time.toDouble(),
+        };
+        final rendered = const JianpuLayoutEngine().layout(score, equalBeat,
+            forcedColumns: [candidate], drawTimeSignature: false);
+        final id = score.measures.single.elements.first.id;
+        final spans = <(double, double)>[];
+        for (final primitive in rendered.primitives) {
+          if (primitive.elementId != id) continue;
+          if (primitive is TextPrimitive) {
+            spans.add((
+              primitive.position.x - 0.225 * primitive.size,
+              primitive.position.x + 0.225 * primitive.size
+            ));
+          } else if (primitive is LinePrimitive &&
+              primitive.from.y == primitive.to.y) {
+            spans.add((
+              primitive.from.x - primitive.thickness / 2,
+              primitive.to.x + primitive.thickness / 2
+            ));
+          }
+        }
+        expect(spans, hasLength(3));
+        final gap = spans[2].$1 - spans[1].$2;
+        expect(gap, lessThan(settings.minNoteGap),
+            reason: 'candidate derived ink gap=$gap');
+        expect(alignedColumns(staves, equalBeat, spacingStretch: 0.7).single,
+            optical,
+            reason: 'reject unsafe equalBeat; derived ink gap=$gap');
+        final stretched =
+            alignedColumns(staves, equalBeat, spacingStretch: 8).single;
+        final stretchedWidth = stretched[Fraction(1, 1)]! - start;
+        for (final time in stretched.keys) {
+          expect(stretched[time],
+              closeTo(start + stretchedWidth * time.toDouble(), 1e-9));
+        }
+      });
+    }
+
+    test('equalBeat keeps safe alternating staff ink candidates', () {
+      final staves = [
+        jianpuScore('c#4:e r:e r:h'),
+        jianpuScore('r:e c#4:e r:h'),
+      ];
+      final equalBeat = LayoutSettings(
+          metadata: metadata, spacingPolicy: SpacingPolicy.equalBeat);
+      final optical =
+          alignedColumns(staves, settings, spacingStretch: 8).single;
+      final columns =
+          alignedColumns(staves, equalBeat, spacingStretch: 8).single;
+      expect(columns, isNot(optical));
+      final start = columns[Fraction.zero]!;
+      final end = columns[Fraction(1, 1)]!;
+      for (final time in columns.keys) {
+        expect(columns[time],
+            closeTo(start + (end - start) * time.toDouble(), 1e-9));
+      }
+    });
+
+    test('equalBeat checks same-staff ink across empty intermediate columns',
+        () {
+      final staves = [
+        jianpuScore('c4:e. c#4:s d4:h.'),
+        tabScore('r:e r:e r:h.'),
+      ];
+      final equalBeat = LayoutSettings(
+          metadata: metadata, spacingPolicy: SpacingPolicy.equalBeat);
+      final optical = alignedColumns(staves, settings).single;
+      expect(optical, contains(Fraction(1, 8)));
+      expect(alignedColumns(staves, equalBeat).single, optical);
+      final layout =
+          layoutStaffSystem(StaffSystem(staves), equalBeat).staves[0];
+      final first = staves[0].measures.single.elements[0].id;
+      final second = staves[0].measures.single.elements[1].id;
+      final dot = layout.primitives.whereType<GlyphPrimitive>().firstWhere(
+          (p) => p.elementId == first && p.smuflName == 'augmentationDot');
+      final accidental = layout.primitives
+          .whereType<GlyphPrimitive>()
+          .firstWhere((p) =>
+              p.elementId == second && p.smuflName.startsWith('accidental'));
+      final right =
+          dot.position.x + metadata.bBoxOf(dot.smuflName).neX * dot.scale;
+      final left = accidental.position.x +
+          metadata.bBoxOf(accidental.smuflName).swX * accidental.scale;
+      expect(left - right, greaterThanOrEqualTo(settings.minNoteGap - 1e-9));
+    });
+    test('equalBeat leaves fixed timeline columns and rendering unchanged', () {
+      final staves = [
+        tabScore('e4:h e4:h'),
+        jianpuScore('r:q r:e r:e r:q r:q'),
+        jianpuScore('r:h. c4:q'),
+        jianpuScore('c4:h. r:q'),
+      ];
+      final equalBeat = LayoutSettings(
+          metadata: metadata, spacingPolicy: SpacingPolicy.equalBeat);
+      for (final beatWidth in [0.5, 12.0]) {
+        final optical =
+            alignedColumns(staves, settings, timelineBeatWidth: beatWidth);
+        final columns = alignedColumns(staves, equalBeat,
+            timelineBeatWidth: beatWidth, spacingStretch: 8);
+        expect(columns, optical);
+        for (final entry in columns.single.entries) {
+          expect(
+              entry.value, closeTo(entry.key.toDouble() * 4 * beatWidth, 1e-9));
+        }
+        final reference = layoutStaffSystem(StaffSystem(staves), settings,
+            timelineBeatWidth: beatWidth);
+        final layout = layoutStaffSystem(StaffSystem(staves), equalBeat,
+            timelineBeatWidth: beatWidth);
+        expect(layout.width, reference.width);
+        for (var i = 0; i < staves.length; i++) {
+          expect(onsetAnchors(staves[i], layout.staves[i]),
+              onsetAnchors(staves[i], reference.staves[i]));
+          expect(
+              layout.staves[i].primitives.map((p) => p.toString()),
+              orderedEquals(
+                  reference.staves[i].primitives.map((p) => p.toString())));
+        }
+      }
+    });
+
+    test('equalBeat keeps whole-rest duration ink and sparse TAB chord columns',
+        () {
+      final staves = [
+        jianpuScore('r:w'),
+        tabScore('e5:q e5+g5+b5+e6:q e5:q e5:q'),
+      ];
+      final equalBeat = LayoutSettings(
+        metadata: metadata,
+        spacingPolicy: SpacingPolicy.equalBeat,
+      );
+      final columns = alignedColumns(staves, equalBeat).single;
+      final start = columns[Fraction.zero]!;
+      final end = columns[Fraction(1, 1)]!;
+      for (final time in columns.keys) {
+        expect(columns[time],
+            closeTo(start + (end - start) * time.toDouble(), 1e-9));
+      }
+      final layout = layoutStaffSystem(StaffSystem(staves), equalBeat);
+      final rests = layout.staves[0].primitives
+          .whereType<TextPrimitive>()
+          .where((p) =>
+              p.elementId == staves[0].measures.single.elements.single.id)
+          .toList();
+      final chord = layout.staves[1].primitives
+          .whereType<TextPrimitive>()
+          .where((p) => p.elementId == staves[1].measures.single.elements[1].id)
+          .toList();
+      expect(rests.where((p) => p.text == '0'), hasLength(4));
+      expect(
+          chord.where((p) => RegExp(r'^\d{2}$').hasMatch(p.text)), isNotEmpty);
+      final restXs =
+          rests.where((p) => p.text == '0').map((p) => p.position.x).toList();
+      expect(restXs, orderedEquals(restXs.toList()..sort()));
+      expect(restXs[1] - restXs[0], closeTo((end - start) / 4, 1e-9));
+      expect(restXs[2] - restXs[1], closeTo((end - start) / 4, 1e-9));
+      expect(restXs[3] - restXs[2], closeTo((end - start) / 4, 1e-9));
+    });
+
+    for (final notes in [
+      'r:s e4:h. r:e.',
+      'e4:h. r:t r:t r:e.',
+    ]) {
+      test('equalBeat keeps mixed whole-rest TAB linear: $notes', () {
+        final equalBeat = LayoutSettings(
+          metadata: metadata,
+          spacingPolicy: SpacingPolicy.equalBeat,
+        );
+        final staves = [jianpuScore('r:w'), tabScore(notes)];
+        final optical = alignedColumns(staves, settings).single;
+        final columns = alignedColumns(staves, equalBeat).single;
+        final start = optical[Fraction.zero]!;
+        final width = optical[Fraction(1, 1)]! - start;
+        expect(columns, isNot(optical));
+        for (final time in optical.keys) {
+          expect(columns[time], closeTo(start + width * time.toDouble(), 1e-9));
+        }
+        final layout = layoutStaffSystem(StaffSystem(staves), equalBeat);
+        final zeros = layout.staves[0].primitives
+            .whereType<TextPrimitive>()
+            .where((p) => p.text == '0')
+            .map((p) => p.position.x)
+            .toList();
+        expect(zeros, hasLength(4));
+        for (var i = 1; i < zeros.length; i++) {
+          expect(zeros[i] - zeros[i - 1], closeTo(width / 4, 1e-9));
+        }
+        final anchors = onsetAnchors(staves[1], layout.staves[1]);
+        expect(anchors, isNotEmpty);
+        for (final entry in anchors.entries) {
+          expect(entry.value,
+              closeTo(zeros.first + width * entry.key.$2.toDouble(), 1e-9));
+        }
+      });
+    }
+
     test('dotted notes use optical advances without denominator cells', () {
       final score = jianpuScore('c4:q. d4:q. e4:q');
       final columns = alignedColumns([score], settings).single;

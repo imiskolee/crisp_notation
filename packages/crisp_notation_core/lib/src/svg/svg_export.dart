@@ -180,9 +180,18 @@ void _emitStaff(
             '${_n(end.x)},${_n(end.y + h)} '
             '${_n(start.x)},${_n(start.y + h)}';
         b.writeln('<polygon points="$pts" stroke="none"$fill/>');
-      case TextPrimitive(:final text, :final position, :final size):
-        b.writeln('<text x="${_n(position.x)}" y="${_n(position.y)}" '
-            'font-family="$textFontFamily" font-size="${_n(size)}" '
+      case TextPrimitive(
+          :final text,
+          :final position,
+          :final size,
+          :final fontWeight,
+          :final cssClass
+        ):
+        final weight = fontWeight == null ? '' : ' font-weight="$fontWeight"';
+        final className =
+            cssClass == null ? '' : ' class="${_escape(cssClass)}"';
+        b.writeln('<text$className x="${_n(position.x)}" y="${_n(position.y)}" '
+            'font-family="$textFontFamily" font-size="${_n(size)}"$weight '
             'text-anchor="middle" stroke="none"$fill>${_escape(text)}</text>');
     }
   }
@@ -386,7 +395,7 @@ double _titleBlockHeight(ScoreMetadata metadata) {
   final hasComposer = metadata.composer?.trim().isNotEmpty ?? false;
   if (!hasTitle && !hasComposer) return 0;
   final titleLines = _metadataLines(metadata.title);
-  return 3.2 + titleLines.length * 1.25 + (hasComposer ? 1.3 : 0);
+  return 3.8 + titleLines.length * 1.45 + (hasComposer ? 1.4 : 0);
 }
 
 List<String> _metadataLines(String? text) => (text ?? '')
@@ -410,22 +419,22 @@ void _emitTitleBlock(
   final centerX = pageWidth / 2;
   var y = 1.8 * staffSpace;
   for (var i = 0; i < titleLines.length; i++) {
-    final size = (i == 0 ? 1.55 : 1.05) * staffSpace;
+    final size = (i == 0 ? 1.9 : 1.15) * staffSpace;
     b.writeln('<text x="${_n(centerX)}" y="${_n(y)}" '
         'font-family="$textFontFamily" font-size="${_n(size)}" '
-        'font-weight="${i == 0 ? '600' : '400'}" '
+        'font-weight="${i == 0 ? '700' : '400'}" '
         'text-anchor="middle" fill="$color" stroke="none">'
         '${_escape(titleLines[i])}</text>');
-    y += (i == 0 ? 1.45 : 1.25) * staffSpace;
+    y += (i == 0 ? 1.9 : 1.35) * staffSpace;
   }
   if (composerLines.isNotEmpty) {
     y += 0.35 * staffSpace;
     for (final line in composerLines) {
       b.writeln('<text x="${_n(pageWidth)}" y="${_n(y)}" '
-          'font-family="$textFontFamily" font-size="${_n(0.9 * staffSpace)}" '
+          'font-family="$textFontFamily" font-size="${_n(0.95 * staffSpace)}" '
           'text-anchor="end" fill="$color" stroke="none">'
           '${_escape(line)}</text>');
-      y += 1.05 * staffSpace;
+      y += 1.15 * staffSpace;
     }
   }
 }

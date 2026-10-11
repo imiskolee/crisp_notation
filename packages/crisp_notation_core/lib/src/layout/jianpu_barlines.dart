@@ -43,6 +43,15 @@ extension _JianpuBarlines on _JianpuBuilder {
     _glyphCenteredAt(SmuflGlyph.repeatDot, cx, _repeatDotLow, 1.0);
   }
 
+  /// Total horizontal ink width of `|:`, matching [startRepeat]'s geometry.
+  double startRepeatWidth() =>
+      s.thickBarlineThickness +
+      s.barlineSeparation +
+      s.thinBarlineThickness +
+      _symbolGap +
+      2 * _dotHalf +
+      0.4;
+
   /// `|:` — thick line, thin line, dots.  Returns right ink edge.
   double startRepeat(double at) {
     final thickX = at + s.thickBarlineThickness / 2;

@@ -29,6 +29,8 @@ ScoreLayout layoutStaff(
   required bool finalBarline,
   Map<String, bool> deferredStems = const {},
   double? targetWidth,
+  List<double>? measureStartXs,
+  double? minimumWidth,
   bool showNoteNames = false,
   bool showNoteOctaves = false,
   NoteNameStyle noteNameStyle = NoteNameStyle.letter,
@@ -43,6 +45,8 @@ ScoreLayout layoutStaff(
       leadingWidth: leadingWidth,
       measureWidths: measureWidths,
       forcedColumns: forcedColumns,
+      measureStartXs: measureStartXs,
+      minimumWidth: minimumWidth,
       barlineXs: targetWidth == null
           ? null
           : [targetWidth - settings.thinBarlineThickness / 2],
@@ -62,6 +66,8 @@ ScoreLayout layoutStaff(
       leadingWidth: leadingWidth,
       measureWidths: measureWidths,
       forcedColumns: forcedColumns,
+      measureStartXs: measureStartXs,
+      minimumWidth: minimumWidth,
       barlineXs: targetWidth == null
           ? null
           : [targetWidth - settings.thinBarlineThickness / 2],
@@ -73,6 +79,8 @@ ScoreLayout layoutStaff(
     leadingWidth: leadingWidth,
     measureWidths: measureWidths,
     forcedColumns: forcedColumns,
+    measureStartXs: measureStartXs,
+    minimumWidth: minimumWidth,
     deferredStems: deferredStems,
     drawTimeSignature: drawTimeSignature,
     finalBarline: finalBarline,
@@ -99,13 +107,31 @@ List<Map<Fraction, double>> alignedColumns(
   List<Score> staves,
   LayoutSettings settings, {
   double spacingStretch = 1.0,
+  double? timelineBeatWidth,
 }) {
   final timeline = _collectTimeline(staves);
   if (timeline.isEmpty) return const [];
+  if (timelineBeatWidth != null) {
+    return [
+      for (final measure in timeline)
+        {
+          for (final time in measure.times)
+            time - measure.start:
+                (time - measure.start).toDouble() * 4 * timelineBeatWidth,
+          for (var time = Fraction.zero;
+              time < measure.end - measure.start;
+              time += Fraction(1, 4))
+            time: time.toDouble() * 4 * timelineBeatWidth,
+        },
+    ];
+  }
+  final durationInk = [
+    for (final _ in staves) <String, List<double>>{},
+  ];
   final ink = [
-    for (final score in staves)
+    for (var si = 0; si < staves.length; si++)
       _inkMetrics(
-        layoutStaff(score, settings,
+        layoutStaff(staves[si], settings,
             leadingWidth: null,
             measureWidths: null,
             forcedColumns: null,
@@ -113,13 +139,14 @@ List<Map<Fraction, double>> alignedColumns(
             drawTimeSignature: true,
             finalBarline: true),
         settings,
-        isJianpu: score.staffType == StaffType.jianpu,
-        isTab: score.staffType == StaffType.tablature,
+        isJianpu: staves[si].staffType == StaffType.jianpu,
+        isTab: staves[si].staffType == StaffType.tablature,
+        durationInk: durationInk[si],
       ),
   ];
   return [
     for (final measure in timeline)
-      _mapTimeline(measure, staves, ink, settings, spacingStretch),
+      _mapTimeline(measure, staves, ink, settings, spacingStretch, durationInk),
   ];
 }
 
@@ -194,6 +221,7 @@ Map<Fraction, double> _mapTimeline(
   List<Map<String, ({double anchor, double left, double right})>> ink,
   LayoutSettings settings,
   double spacingStretch,
+  List<Map<String, List<double>>> durationInk,
 ) {
   final times = measure.times.toList()..sort();
   final bounds = [
@@ -247,7 +275,48 @@ Map<Fraction, double> _mapTimeline(
     x += advance * spacingStretch;
     columns[to] = x;
   }
-  return columns;
+  if (settings.spacingPolicy != SpacingPolicy.equalBeat || times.length < 2) {
+    return columns;
+  }
+
+  final start = times.first - measure.start;
+  final end = times.last - measure.start;
+  final opticalWidth = columns[end]! - columns[start]!;
+  final equal = <Fraction, double>{
+    start: columns[start]!,
+    for (var i = 1; i < times.length; i++)
+      times[i] - measure.start: columns[start]! +
+          opticalWidth *
+              ((times[i] - measure.start).toDouble() / end.toDouble()),
+  };
+  for (final event in measure.events) {
+    if (event.start < measure.start || event.start >= measure.end) continue;
+    final widths = durationInk[event.staff][event.element.id];
+    if (widths == null) continue;
+    for (var i = 0; i < widths.length; i++) {
+      final time = event.start - measure.start + Fraction(i + 1, 4);
+      final previous = bounds[event.staff][time];
+      bounds[event.staff][time] = (
+        left: max(previous?.left ?? 0, widths[i]),
+        right: max(previous?.right ?? 0, widths[i]),
+      );
+    }
+  }
+  for (final staff in bounds) {
+    final entries = staff.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    var rightEdge = double.negativeInfinity;
+    for (final entry in entries) {
+      final position = equal[start]! +
+          opticalWidth * (entry.key.toDouble() / end.toDouble()).clamp(0, 1);
+      if (position - entry.value.left + 1e-9 <
+          rightEdge + settings.minNoteGap) {
+        return columns;
+      }
+      rightEdge = max(rightEdge, position + entry.value.right);
+    }
+  }
+  return equal;
 }
 
 Map<String, ({double anchor, double left, double right})> _inkMetrics(
@@ -255,6 +324,7 @@ Map<String, ({double anchor, double left, double right})> _inkMetrics(
   LayoutSettings settings, {
   bool isJianpu = false,
   bool isTab = false,
+  required Map<String, List<double>> durationInk,
 }) {
   final anchors = <String, double>{};
   final left = <String, double>{};
@@ -287,6 +357,7 @@ Map<String, ({double anchor, double left, double right})> _inkMetrics(
       if (isJianpu &&
           anchors[id] != primitive.position.x &&
           primitive.text == '0') {
+        durationInk.putIfAbsent(id, () => []).add(0.225 * primitive.size);
         continue;
       }
       final half = isJianpu && RegExp(r'^[0-7]$').hasMatch(primitive.text)
@@ -295,7 +366,15 @@ Map<String, ({double anchor, double left, double right})> _inkMetrics(
       l = primitive.position.x - half;
       r = primitive.position.x + half;
     } else if (primitive is LinePrimitive) {
-      if (isJianpu && primitive.from.y == primitive.to.y) continue;
+      if (isJianpu && primitive.from.y == primitive.to.y) {
+        if (anchors[id] != null &&
+            (primitive.from.x + primitive.to.x) / 2 > anchors[id]!) {
+          durationInk.putIfAbsent(id, () => []).add(
+              (primitive.to.x - primitive.from.x).abs() / 2 +
+                  primitive.thickness / 2);
+        }
+        continue;
+      }
       l = min(primitive.from.x, primitive.to.x) - primitive.thickness / 2;
       r = max(primitive.from.x, primitive.to.x) + primitive.thickness / 2;
     } else {

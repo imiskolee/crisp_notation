@@ -39,11 +39,40 @@ void main() {
     });
   });
 
-  group('the printed mark is unchanged', () {
-    test('the display annotation still says what it always said', () {
-      expect(read('Q:1/4=120').annotations.map((a) => a.text), ['♩ = 120']);
-      expect(read('Q:"Allegro" 1/4=120').annotations.map((a) => a.text),
-          ['Allegro ♩ = 120']);
+  group('initial and changed tempo display', () {
+    const changed = 'X:1\nM:4/4\nL:1/4\nQ:1/4=58\nK:C\n'
+        'C D E F | [Q:1/4=72] G A B c |\n';
+
+    test('header Q sets playback tempo without a visible annotation', () {
+      final score = scoreFromAbc(changed);
+      expect(score.tempo, const Tempo(58));
+      expect(score.annotations.map((a) => a.text), isNot(contains('♩ = 58')));
+    });
+
+    test('inline Q changes the next measure and annotates its first note', () {
+      final score = scoreFromAbc(changed);
+      expect(score.measures[1].tempoChange, const Tempo(72));
+      expect(score.annotations.map((a) => (a.elementId, a.text)),
+          [('e4', '♩ = 72')]);
+    });
+
+    test('tempo map starts at the header tempo then applies the change', () {
+      final map = tempoMapOf(scoreFromAbc(changed));
+      expect(map.spans, hasLength(2));
+      expect(map.spans[0].at, Fraction(0, 1));
+      expect(map.spans[0].quarterBpm, 58);
+      expect(map.spans[1].at, Fraction(1, 1));
+      expect(map.spans[1].quarterBpm, 72);
+    });
+
+    test('standalone body Q has the same structured and visible semantics', () {
+      final score = scoreFromAbc(
+        'X:1\nM:4/4\nL:1/4\nQ:1/4=58\nK:C\n'
+        'C D E F |\nQ:1/4=72\nG A B c |\n',
+      );
+      expect(score.measures[1].tempoChange, const Tempo(72));
+      expect(score.annotations.map((a) => (a.elementId, a.text)),
+          [('e4', '♩ = 72')]);
     });
   });
 
@@ -61,10 +90,10 @@ void main() {
       expect(qLine('Q:120'), 'Q:1/4=120');
     });
 
-    test('the label survives the round trip through Q:', () {
-      // `Tempo` cannot hold the label, so it rides in the Q: field itself
-      // rather than being left behind in the annotation.
-      expect(qLine('Q:"Allegro" 1/4=120'), 'Q:"Allegro" 1/4=120');
+    test('a header label is not retained as a visible annotation', () {
+      // `Tempo` carries playback speed but not free text; header Q: no longer
+      // creates an annotation solely to preserve that label for export.
+      expect(qLine('Q:"Allegro" 1/4=120'), 'Q:1/4=120');
     });
 
     test('the derived annotation is NOT also written into the body', () {

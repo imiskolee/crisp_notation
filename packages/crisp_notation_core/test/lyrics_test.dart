@@ -93,6 +93,10 @@ void main() {
   });
 
   group('layout', () {
+    test('default lyric text is slightly larger for readability', () {
+      expect(settings.lyricSize, 1.7);
+    });
+
     test('syllables render as text primitives centered under their note', () {
       final score = Score.simple(
         notes: 'c4:q d4 e4 f4',
